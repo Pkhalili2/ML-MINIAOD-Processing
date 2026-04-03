@@ -556,6 +556,3 @@ Then verify:
 - `NanoTree` exists
 - `ParticleTree` exists
 - `cutflow` exists
-#   M L - M I N I A O D - P r o c e s s i n g 
- 
- 
