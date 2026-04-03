@@ -1,1 +1,1 @@
-/hdfs/store/user/yizeng/ExoHiggs_8b_A020_A108/MiniAOD/997784_ExoHiggs_8b_A020_A108_UL18MiniAOD.root
+/hdfs/store/mc/RunIIAutumn18MiniAOD/DYJetsToLL_M-50_TuneCP5_13TeV-amcatnloFXFX-pythia8/MINIAODSIM/102X_upgrade2018_realistic_v15-v1/120000/B3F93EA2-04C6-E04E-96AF-CB8FAF67E6BA.root
