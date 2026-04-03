@@ -1,0 +1,26 @@
+universe                 = vanilla
+executable               = condor/run_cmssw_ak15.sh
+
+should_transfer_files    = YES
+when_to_transfer_output  = ON_EXIT
+use_x509userproxy        = true
+
+output                   = logs/$(DATASET_TAG)_$(CHUNK_ID).out
+error                    = logs/$(DATASET_TAG)_$(CHUNK_ID).err
+log                      = logs/$(DATASET_TAG)_$(CHUNK_ID).log
+
+request_cpus             = 4
+request_memory           = 8 GB
+request_disk             = 20 GB
+
+environment              = "CMSSW_VERSION=CMSSW_10_6_17 SCRAM_ARCH=slc7_amd64_gcc700"
+
+transfer_input_files     = MyAnalysis.tgz, JMEAnalysis.tar.xz, condor/NanoIncludingAK15_plusFlatTree_cfg.py, condor/AK15JetProducer_cfg.py, $(INPUT_LIST)
+
+arguments = $(DATASET_TAG) $(CHUNK_ID) $(INPUT_LIST) $(CMSSW_VERSION) $(SCRAM_ARCH) $(IS_SIGNAL) $(FILL_ALL_EVENTS)
+
+transfer_output_files    = flat_$(DATASET_TAG)_$(CHUNK_ID).root
+
++JobBatchName            = "ak15_onefile_twotree"
+
+queue DATASET_TAG CHUNK_ID INPUT_LIST IS_SIGNAL FILL_ALL_EVENTS from condor/job_table.txt
