@@ -539,7 +539,7 @@ edmEventSize -a file:/path/to/file.root
 
 ## Recommended first test
 
-Use one known non-empty MiniAOD file and run (as I did):
+Use one known non-empty MiniAOD file and run:
 
 ```bash
 cmsRun condor/NanoIncludingAK15_plusFlatTree_cfg.py \
