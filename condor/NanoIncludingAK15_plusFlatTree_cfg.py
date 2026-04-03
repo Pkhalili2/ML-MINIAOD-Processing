@@ -91,4 +91,5 @@ process.ak15FlatTree = cms.EDAnalyzer(
     fillAllEvents=cms.bool(bool(options.fillAllEvents))
 )
 
-process.nanoSequenceMC += process.ak15FlatTree
+process.ak15FlatTree_step = cms.Path(process.ak15FlatTree)
+process.schedule.append(process.ak15FlatTree_step)
