@@ -1,4 +1,3 @@
-[pkhalili2@login03 src]$ cat MyAnalysis/AK8FlatTreeProducer/plugins/AK15FlatTreeProducer.cc
 #include "FWCore/Framework/interface/Frameworkfwd.h"
 #include "FWCore/Framework/interface/one/EDAnalyzer.h"
 #include "FWCore/Framework/interface/Event.h"
