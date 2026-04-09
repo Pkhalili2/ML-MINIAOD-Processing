@@ -1,3 +1,4 @@
+[pkhalili2@login03 src]$ cat MyAnalysis/AK8FlatTreeProducer/plugins/AK15FlatTreeProducer.cc
 #include "FWCore/Framework/interface/Frameworkfwd.h"
 #include "FWCore/Framework/interface/one/EDAnalyzer.h"
 #include "FWCore/Framework/interface/Event.h"
@@ -12,6 +13,8 @@
 
 #include "CommonTools/UtilAlgos/interface/TFileService.h"
 #include "FWCore/ServiceRegistry/interface/Service.h"
+
+#include "DataFormats/Math/interface/deltaPhi.h"
 
 #include "TTree.h"
 #include "TH1I.h"
@@ -33,37 +36,26 @@ private:
   void endJob() override {}
 
   void registerParticleBranches(TTree* tree);
-  void registerNanoBranches(TTree* tree);
 
   edm::EDGetTokenT<JetCollection> recoJetsToken_;
 
   TTree* particleTree_{nullptr};
-  TTree* nanoTree_{nullptr};
   TH1I* cutflow_{nullptr};
 
   bool is_signal_new_{false};
   bool fillAllEvents_{true};
   double minJetPt_{170.0};
 
-  // Shared event bookkeeping
   unsigned int run_;
   unsigned int lumi_;
   unsigned long long event_;
 
-  // ParticleTree branches
   std::vector<double> Part_E_, Part_PX_, Part_PY_, Part_PZ_;
   std::vector<double> Part_E_log_, Part_P_, Part_P_log_, Part_Etarel_, Part_Phirel_;
+
   double truthPX_, truthPY_, truthPZ_, truthE_;
   double E_tot_, PX_tot_, PY_tot_, PZ_tot_, P_tot_, Eta_tot_, Phi_tot_;
   int nPart_, idx_, origIdx_, ttv_;
-
-  // NanoTree branches
-  int hasAK15_, nAK15_;
-  double SuperFatJetAK15_pt_, SuperFatJetAK15_eta_, SuperFatJetAK15_phi_, SuperFatJetAK15_mass_;
-  double SuperFatJetAK15_tau1_, SuperFatJetAK15_tau2_, SuperFatJetAK15_tau3_, SuperFatJetAK15_tau4_;
-  double SuperFatJetAK15_area_;
-  double SuperFatJetAK15_btag_probb_, SuperFatJetAK15_btag_probbb_;
-  double SuperFatJetAK15_btag_probc_, SuperFatJetAK15_btag_probudsg_;
 };
 
 AK15FlatTreeProducer::AK15FlatTreeProducer(const edm::ParameterSet& iConfig) {
@@ -83,6 +75,7 @@ void AK15FlatTreeProducer::registerParticleBranches(TTree* tree) {
   tree->Branch("run", &run_);
   tree->Branch("lumi", &lumi_);
   tree->Branch("event", &event_);
+
   tree->Branch("nPart", &nPart_);
   tree->Branch("Part_E", &Part_E_);
   tree->Branch("Part_PX", &Part_PX_);
@@ -93,10 +86,12 @@ void AK15FlatTreeProducer::registerParticleBranches(TTree* tree) {
   tree->Branch("Part_P_log", &Part_P_log_);
   tree->Branch("Part_Etarel", &Part_Etarel_);
   tree->Branch("Part_Phirel", &Part_Phirel_);
+
   tree->Branch("truthPX", &truthPX_);
   tree->Branch("truthPY", &truthPY_);
   tree->Branch("truthPZ", &truthPZ_);
   tree->Branch("truthE", &truthE_);
+
   tree->Branch("E_tot", &E_tot_);
   tree->Branch("PX_tot", &PX_tot_);
   tree->Branch("PY_tot", &PY_tot_);
@@ -104,31 +99,11 @@ void AK15FlatTreeProducer::registerParticleBranches(TTree* tree) {
   tree->Branch("P_tot", &P_tot_);
   tree->Branch("Eta_tot", &Eta_tot_);
   tree->Branch("Phi_tot", &Phi_tot_);
+
   tree->Branch("is_signal_new", &is_signal_new_);
   tree->Branch("idx", &idx_);
   tree->Branch("origIdx", &origIdx_);
   tree->Branch("ttv", &ttv_);
-}
-
-void AK15FlatTreeProducer::registerNanoBranches(TTree* tree) {
-  tree->Branch("run", &run_);
-  tree->Branch("lumi", &lumi_);
-  tree->Branch("event", &event_);
-  tree->Branch("hasAK15", &hasAK15_);
-  tree->Branch("nAK15", &nAK15_);
-  tree->Branch("SuperFatJetAK15_pt", &SuperFatJetAK15_pt_);
-  tree->Branch("SuperFatJetAK15_eta", &SuperFatJetAK15_eta_);
-  tree->Branch("SuperFatJetAK15_phi", &SuperFatJetAK15_phi_);
-  tree->Branch("SuperFatJetAK15_mass", &SuperFatJetAK15_mass_);
-  tree->Branch("SuperFatJetAK15_tau1", &SuperFatJetAK15_tau1_);
-  tree->Branch("SuperFatJetAK15_tau2", &SuperFatJetAK15_tau2_);
-  tree->Branch("SuperFatJetAK15_tau3", &SuperFatJetAK15_tau3_);
-  tree->Branch("SuperFatJetAK15_tau4", &SuperFatJetAK15_tau4_);
-  tree->Branch("SuperFatJetAK15_area", &SuperFatJetAK15_area_);
-  tree->Branch("SuperFatJetAK15_btag_probb", &SuperFatJetAK15_btag_probb_);
-  tree->Branch("SuperFatJetAK15_btag_probbb", &SuperFatJetAK15_btag_probbb_);
-  tree->Branch("SuperFatJetAK15_btag_probc", &SuperFatJetAK15_btag_probc_);
-  tree->Branch("SuperFatJetAK15_btag_probudsg", &SuperFatJetAK15_btag_probudsg_);
 }
 
 void AK15FlatTreeProducer::beginJob() {
@@ -142,9 +117,6 @@ void AK15FlatTreeProducer::beginJob() {
   cutflow_->GetXaxis()->SetBinLabel(2, "hasAK15");
   cutflow_->GetXaxis()->SetBinLabel(3, "ptCut");
 
-  nanoTree_ = fs->make<TTree>("NanoTree", "Nano-like AK15 event tree");
-  registerNanoBranches(nanoTree_);
-
   particleTree_ = fs->make<TTree>("ParticleTree", "Particle-level AK15 tree");
   registerParticleBranches(particleTree_);
 }
@@ -156,7 +128,6 @@ void AK15FlatTreeProducer::analyze(const edm::Event& iEvent, const edm::EventSet
   lumi_ = iEvent.id().luminosityBlock();
   event_ = iEvent.id().event();
 
-  // reset ParticleTree vars
   Part_E_.clear();
   Part_PX_.clear();
   Part_PY_.clear();
@@ -174,23 +145,6 @@ void AK15FlatTreeProducer::analyze(const edm::Event& iEvent, const edm::EventSet
   origIdx_ = static_cast<int>(iEvent.id().event());
   ttv_ = 0;
 
-  // reset NanoTree vars
-  hasAK15_ = 0;
-  nAK15_ = 0;
-  SuperFatJetAK15_pt_ = -999.;
-  SuperFatJetAK15_eta_ = -999.;
-  SuperFatJetAK15_phi_ = -999.;
-  SuperFatJetAK15_mass_ = -999.;
-  SuperFatJetAK15_tau1_ = -999.;
-  SuperFatJetAK15_tau2_ = -999.;
-  SuperFatJetAK15_tau3_ = -999.;
-  SuperFatJetAK15_tau4_ = -999.;
-  SuperFatJetAK15_area_ = -999.;
-  SuperFatJetAK15_btag_probb_ = -999.;
-  SuperFatJetAK15_btag_probbb_ = -999.;
-  SuperFatJetAK15_btag_probc_ = -999.;
-  SuperFatJetAK15_btag_probudsg_ = -999.;
-
   edm::Handle<JetCollection> recoJets;
   iEvent.getByToken(recoJetsToken_, recoJets);
 
@@ -198,7 +152,6 @@ void AK15FlatTreeProducer::analyze(const edm::Event& iEvent, const edm::EventSet
   float max_pt = -1.0;
 
   if (recoJets.isValid()) {
-    nAK15_ = static_cast<int>(recoJets->size());
     for (const auto& jet : *recoJets) {
       if (jet.pt() > max_pt) {
         max_pt = jet.pt();
@@ -208,26 +161,9 @@ void AK15FlatTreeProducer::analyze(const edm::Event& iEvent, const edm::EventSet
   }
 
   if (selectedJet) {
-    hasAK15_ = 1;
     cutflow_->Fill(1);
     if (selectedJet->pt() > minJetPt_) cutflow_->Fill(2);
 
-    // NanoTree high-level branches
-    SuperFatJetAK15_pt_ = selectedJet->pt();
-    SuperFatJetAK15_eta_ = selectedJet->eta();
-    SuperFatJetAK15_phi_ = selectedJet->phi();
-    SuperFatJetAK15_mass_ = selectedJet->mass();
-    SuperFatJetAK15_area_ = selectedJet->jetArea();
-    if (selectedJet->hasUserFloat("NjettinessAK15CHS:tau1")) SuperFatJetAK15_tau1_ = selectedJet->userFloat("NjettinessAK15CHS:tau1");
-    if (selectedJet->hasUserFloat("NjettinessAK15CHS:tau2")) SuperFatJetAK15_tau2_ = selectedJet->userFloat("NjettinessAK15CHS:tau2");
-    if (selectedJet->hasUserFloat("NjettinessAK15CHS:tau3")) SuperFatJetAK15_tau3_ = selectedJet->userFloat("NjettinessAK15CHS:tau3");
-    if (selectedJet->hasUserFloat("NjettinessAK15CHS:tau4")) SuperFatJetAK15_tau4_ = selectedJet->userFloat("NjettinessAK15CHS:tau4");
-    SuperFatJetAK15_btag_probb_ = selectedJet->bDiscriminator("pfDeepCSVJetTags:probb");
-    SuperFatJetAK15_btag_probbb_ = selectedJet->bDiscriminator("pfDeepCSVJetTags:probbb");
-    SuperFatJetAK15_btag_probc_ = selectedJet->bDiscriminator("pfDeepCSVJetTags:probc");
-    SuperFatJetAK15_btag_probudsg_ = selectedJet->bDiscriminator("pfDeepCSVJetTags:probudsg");
-
-    // ParticleTree branches
     E_tot_ = selectedJet->energy();
     PX_tot_ = selectedJet->px();
     PY_tot_ = selectedJet->py();
@@ -267,8 +203,7 @@ void AK15FlatTreeProducer::analyze(const edm::Event& iEvent, const edm::EventSet
     nPart_ = static_cast<int>(Part_E_.size());
   }
 
-  if (fillAllEvents_ || hasAK15_) {
-    nanoTree_->Fill();
+  if (fillAllEvents_ || selectedJet) {
     particleTree_->Fill();
   }
 }
