@@ -19,7 +19,15 @@ options.register(
     'ak15_flat.root',
     VarParsing.multiplicity.singleton,
     VarParsing.varType.string,
-    'Single ROOT output file containing NanoTree and ParticleTree'
+    'Flat particle-level ROOT output'
+)
+
+options.register(
+    'nanoOut',
+    'output_Nano.root',
+    VarParsing.multiplicity.singleton,
+    VarParsing.varType.string,
+    'Official NanoAOD EDM output'
 )
 
 options.register(
@@ -36,6 +44,14 @@ options.register(
     VarParsing.multiplicity.singleton,
     VarParsing.varType.int,
     'Fill all events'
+)
+
+options.register(
+    'removeProblemModules',
+    0,
+    VarParsing.multiplicity.singleton,
+    VarParsing.varType.int,
+    'Temporarily remove problematic Nano modules'
 )
 
 options.parseArguments()
@@ -74,10 +90,87 @@ process.maxEvents = cms.untracked.PSet(
     input=cms.untracked.int32(options.maxEvents)
 )
 
-if hasattr(process, "NANOAODSIMoutput_step"):
-    process.schedule.remove(process.NANOAODSIMoutput_step)
 if hasattr(process, "NANOAODSIMoutput"):
-    del process.NANOAODSIMoutput
+    process.NANOAODSIMoutput.fileName = cms.untracked.string(options.nanoOut)
+
+if int(options.removeProblemModules) == 1:
+    problem_module_names = [
+        "slimmedElectronsUpdated",
+        "isoForEle",
+        "ptRatioRelForEle",
+        "electronMVATTH",
+        "electronMVAValueMapProducer",
+        "electronTable",
+        "electronMCMatchForTable",
+        "linkedObjects",
+        "egmGsfElectronIDs",
+        "bitmapVIDForEle",
+        "bitmapVIDForEleHEEP",
+        "slimmedElectronsWithUserData",
+        "finalElectrons",
+        "finalIsolatedTracks",
+        "isoForIsoTk",
+        "isFromLostTrackForIsoTk",
+        "muonsMCMatchForTable",
+        "jetMCTable",
+        "isoTrackTable",
+        "simpleCleanerTable",
+        "photonTable",
+        "tauTable",
+        "fsrTable",
+        "muonTable",
+        "muonMVALowPt",
+        "muonMVATTH",
+        "muonFSRassociation",
+        "muonFSRphotons",
+        "jetTable",
+        "cjetNN",
+        "bjetNN",
+        "lepInJetVars",
+        "muonMCTable",
+        "electronsMCMatchForTable",
+        "electronMCTable",
+        "photonsMCMatchForTable",
+        "photonMCTable",
+        "tausMCMatchLepTauForTable",
+        "tausMCMatchHadTauForTable",
+        "tauMCTable",
+        "btagWeightTable",
+        "fatJetTable",
+    ]
+
+    removed_problem_modules = []
+
+    def remove_from_sequence_and_path(label):
+        if not hasattr(process, label):
+            return False
+
+        mod = getattr(process, label)
+        removed = False
+
+        if hasattr(process, "nanoSequenceMC"):
+            try:
+                process.nanoSequenceMC.remove(mod)
+                removed = True
+            except Exception:
+                pass
+
+        if hasattr(process, "nanoAOD_step"):
+            try:
+                process.nanoAOD_step.remove(mod)
+                removed = True
+            except Exception:
+                pass
+
+        return removed
+
+    for label in problem_module_names:
+        if remove_from_sequence_and_path(label):
+            removed_problem_modules.append(label)
+
+    print("\nRemoved problematic modules from nanoSequenceMC/nanoAOD_step:")
+    for label in removed_problem_modules:
+        print("  ", label)
 
 process.TFileService = cms.Service(
     "TFileService",
@@ -91,5 +184,11 @@ process.ak15FlatTree = cms.EDAnalyzer(
     fillAllEvents=cms.bool(bool(options.fillAllEvents))
 )
 
-process.ak15FlatTree_step = cms.Path(process.ak15FlatTree)
-process.schedule.append(process.ak15FlatTree_step)
+if hasattr(process, "nanoSequenceMC"):
+    process.nanoSequenceMC += process.ak15FlatTree
+
+if hasattr(process, "nanoAOD_step"):
+    try:
+        process.nanoAOD_step += process.ak15FlatTree
+    except Exception:
+        pass
