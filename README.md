@@ -157,9 +157,3 @@ cmsRun NanoIncludingAK15_UL18NanoAODv2_OnlyNano_mc_cfg.py \
 ```
 
 ---
-
-- full CMS event information
-- reco-level particle clouds
-- truth-level labels
-
-in a single, analysis-ready ROOT file.
