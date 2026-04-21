@@ -1,14 +1,10 @@
 <use name="FWCore/Framework"/>
 <use name="FWCore/ParameterSet"/>
-<use name="FWCore/ServiceRegistry"/>
-<use name="CommonTools/UtilAlgos"/>
-
+<use name="FWCore/Utilities"/>
+<use name="DataFormats/Common"/>
+<use name="DataFormats/Candidate"/>
 <use name="DataFormats/PatCandidates"/>
-<use name="DataFormats/JetReco"/>
+<use name="DataFormats/NanoAOD"/>
 <use name="DataFormats/Math"/>
-
-<use name="root"/>
-
-<library file="*.cc" name="MyAnalysisAK8FlatTreeProducerPlugins">
-  <flags EDM_PLUGIN="1"/>
-</library>
+<use name="rootcore"/>
+<flags EDM_PLUGIN="1"/>
