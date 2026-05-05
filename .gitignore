@@ -1,0 +1,23 @@
+# ROOT and CMSSW build products
+*.root
+*.so
+*.d
+*.pcm
+tmp/
+tmp_*/
+
+# Condor generated state
+condor/.generated/
+condor/.logs/
+condor/.outputs/
+condor/generated/
+condor/logs/
+condor/outputs/
+condor/test_outputs/
+condor/package.tgz
+job_report_*.txt
+
+# Local editor/cache files
+__pycache__/
+*.pyc
+.DS_Store

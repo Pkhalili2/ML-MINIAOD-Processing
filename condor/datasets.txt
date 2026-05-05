@@ -1,0 +1,12 @@
+# Example inputs for condor/submit_all.sh.
+#
+# The current driver is argument based, not this table based. Keep this file as a
+# copy/paste reference for common datasets:
+#
+# HDFS signal MiniAOD directory:
+#   --tag signal_8b --is-signal 1 --input /hdfs/store/user/abdollah/ExoHiggs/MiniAOD_8bjets
+#
+# DAS MiniAOD datasets, usually with --use-x509 and an xrootd prefix:
+#   --tag TTToHadronic --is-signal 0 --input /TTToHadronic_TuneCP5_13TeV-powheg-pythia8/RunIISummer20UL18MiniAODv2-106X_upgrade2018_realistic_v16_L1v1-v1/MINIAODSIM
+#   --tag TTTo2L2Nu --is-signal 0 --input /TTTo2L2Nu_TuneCP5_13TeV-powheg-pythia8/RunIISummer20UL18MiniAODv2-106X_upgrade2018_realistic_v16_L1v1-v1/MINIAODSIM
+#   --tag TTToSemiLeptonic --is-signal 0 --input /TTToSemiLeptonic_TuneCP5_13TeV-powheg-pythia8/RunIISummer20UL18MiniAODv2-106X_upgrade2018_realistic_v16_L1v1-v2/MINIAODSIM

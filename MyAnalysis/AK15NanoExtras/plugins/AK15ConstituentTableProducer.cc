@@ -11,6 +11,7 @@
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 #include "FWCore/ParameterSet/interface/ConfigurationDescriptions.h"
 #include "FWCore/ParameterSet/interface/ParameterSetDescription.h"
+#include "FWCore/MessageLogger/interface/MessageLogger.h"
 
 #include "DataFormats/NanoAOD/interface/FlatTable.h"
 #include "DataFormats/PatCandidates/interface/Jet.h"
@@ -30,6 +31,8 @@ private:
   edm::EDGetTokenT<pat::JetCollection> jetsToken_;
 
   bool saveJetConstituents_;
+  bool debug_;
+  unsigned int debugMaxJets_;
   std::string jetTableName_;
   std::string pfCandTableName_;
   std::string genCandTableName_;
@@ -38,6 +41,8 @@ private:
 AK15ConstituentTableProducer::AK15ConstituentTableProducer(const edm::ParameterSet& iConfig)
     : jetsToken_(consumes<pat::JetCollection>(iConfig.getParameter<edm::InputTag>("jets"))),
       saveJetConstituents_(iConfig.getParameter<bool>("saveJetConstituents")),
+      debug_(iConfig.existsAs<bool>("debug") ? iConfig.getParameter<bool>("debug") : false),
+      debugMaxJets_(iConfig.existsAs<unsigned int>("debugMaxJets") ? iConfig.getParameter<unsigned int>("debugMaxJets") : 5),
       jetTableName_(iConfig.getParameter<std::string>("jetTableName")),
       pfCandTableName_(iConfig.getParameter<std::string>("pfCandTableName")),
       genCandTableName_(iConfig.getParameter<std::string>("genCandTableName")) {
@@ -223,6 +228,28 @@ void AK15ConstituentTableProducer::produce(edm::StreamID,
     }
   }
 
+  if (debug_) {
+    edm::LogVerbatim("AK15ConstituentTableProducer")
+        << "event " << iEvent.id().run() << ":" << iEvent.id().luminosityBlock() << ":"
+        << iEvent.id().event()
+        << " ak15Jets=" << jets.size()
+        << " savedPFConstituents=" << pf_pt.size()
+        << " savedGenConstituents=" << gen_pt.size();
+
+    const unsigned int maxJetsToPrint = std::min<unsigned int>(debugMaxJets_, jets.size());
+    for (unsigned int j = 0; j < maxJetsToPrint; ++j) {
+      const auto& jet = jets[j];
+      edm::LogVerbatim("AK15ConstituentTableProducer")
+          << "  jet " << j
+          << " pt=" << jet.pt()
+          << " eta=" << jet.eta()
+          << " daughters=" << jet.numberOfDaughters()
+          << " savedPF=" << nPFConstituents[j]
+          << " savedGen=" << nGenConstituents[j]
+          << " hasMatchedGenJet=" << matchedGenJetExists[j];
+    }
+  }
+
   auto jetExt = std::make_unique<nanoaod::FlatTable>(jets.size(), jetTableName_, false, true);
   jetExt->addColumn<int>("nPFConstituents", nPFConstituents,
                          "number of PF constituents stored for this AK15 jet",
@@ -347,6 +374,8 @@ void AK15ConstituentTableProducer::fillDescriptions(edm::ConfigurationDescriptio
   edm::ParameterSetDescription desc;
   desc.add<edm::InputTag>("jets", edm::InputTag("selectedPatJetsAK15PFCHS"));
   desc.add<bool>("saveJetConstituents", true);
+  desc.add<bool>("debug", false);
+  desc.add<unsigned int>("debugMaxJets", 5);
   desc.add<std::string>("jetTableName", "SuperFatJetAK15");
   desc.add<std::string>("pfCandTableName", "SuperFatJetAK15PFCand");
   desc.add<std::string>("genCandTableName", "SuperFatJetAK15GenCand");

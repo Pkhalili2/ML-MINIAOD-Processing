@@ -33,6 +33,8 @@ from FWCore.ParameterSet.VarParsing import VarParsing
 options = VarParsing('analysis')
 options.parseArguments()
 
+process.maxEvents.input = cms.untracked.int32(options.maxEvents)
+
 # Input source
 process.source = cms.Source("PoolSource",
    # fileNames = cms.untracked.vstring('file:ExoHiggs_6b_UL18MiniAOD.root'),
@@ -51,10 +53,12 @@ process.configurationMetadata = cms.untracked.PSet(
     version = cms.untracked.string('$Revision: 1.19 $')
 )
 
-process.ak15ConstituentTables = cms.EDProducer(
+process.ak15ConstituentTable = cms.EDProducer(
     "AK15ConstituentTableProducer",
     jets = cms.InputTag("selectedPatJetsAK15PFCHS"),
     saveJetConstituents = cms.bool(True),
+    debug = cms.bool(False),
+    debugMaxJets = cms.uint32(5),
     jetTableName = cms.string("SuperFatJetAK15"),
     pfCandTableName = cms.string("SuperFatJetAK15PFCand"),
     genCandTableName = cms.string("SuperFatJetAK15GenCand"),
@@ -180,7 +184,7 @@ from PhysicsTools.NanoAOD.common_cff import Var
 
 process.jetAK15Table = cms.EDProducer("SimpleCandidateFlatTableProducer",
     src = cms.InputTag("selectedPatJetsAK15PFCHS"),
-    cut = cms.string("pt > 170"),
+    cut = cms.string(""),
     name = cms.string("SuperFatJetAK15"),
     doc = cms.string("AK15 jets with Njettiness and SoftDrop mass"),
     singleton = cms.bool(False),
@@ -256,7 +260,7 @@ process.nanoSequenceMC += process.NjettinessAK15
 process.nanoSequenceMC += process.subjetTable
 process.nanoSequenceMC += process.jetAK15Table 
 process.nanoSequenceMC += process.genJetAK15Table
-process.nanoSequenceMC += process.ak15ConstituentTables
+process.nanoSequenceMC += process.ak15ConstituentTable
 # Then ensure 'updatedPatJetsAK15' is included in your PAT sequences and NanoAOD output modules.
 
 #from Configuration.EventContent.EventContent_cff import MINIAODSIMEventContent
