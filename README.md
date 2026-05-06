@@ -668,7 +668,8 @@ The `condor/` directory contains a batch workflow for large MiniAOD or enriched
 NanoAOD datasets. It generates one non-overlapping file list per job, packages
 the needed CMSSW source code, runs in a fresh worker-node CMSSW area, and copies
 ROOT outputs to the requested output directory. Condor only transfers the small
-job report back; the ROOT outputs are copied by the job itself.
+job report and an output tarball back; direct copies to remote storage are
+attempted only when that path is writable from the worker.
 
 `CMSSW_10_6_17` is an EL7-era release. The worker script therefore tries to
 re-exec itself inside the standard CMSSW RHEL7 Singularity/Apptainer image:
@@ -687,6 +688,8 @@ Main files:
 - `condor/package_project.sh` - packages `MyAnalysis`, `JMEAnalysis`, the Stage 1 config, and the Stage 2 macro
 - `condor/submit.sub` - HTCondor submit description
 - `condor/run.sh` - worker-node executable
+- `condor/unpack_outputs.sh` - unpacks returned tarballs and organizes ROOT files
+- `condor/hadd_by_size.sh` - hadds ROOT files into size-capped consolidated outputs
 
 ### Test on Two Small Jobs
 
@@ -812,13 +815,72 @@ The chunk lists and manifest are written under:
 condor/.generated/<tag>/
 ```
 
+### Returned Outputs
+
+Each Condor job returns:
+
+```text
+root_outputs_<tag>_<chunk>.tgz
+```
+
+For example, a dataset with 1115 files and `--files-per-job 20` produces 56
+jobs and therefore 56 returned tarballs. Each tarball contains the ROOT files
+for that chunk:
+
+- `nano_<tag>_<chunk>.root` for Stage 1 output when `--save-nano 1`
+- `flat_<tag>_<chunk>.root` for Stage 2 output
+
+Unpack and organize all tarballs from one output directory:
+
+```bash
+bash condor/unpack_outputs.sh /nfs_scratch/pkhalili2/ak15_condor_outputs/signal_8b
+```
+
+This creates:
+
+```text
+/nfs_scratch/pkhalili2/ak15_condor_outputs/signal_8b/nano_ntuples/
+/nfs_scratch/pkhalili2/ak15_condor_outputs/signal_8b/flat_ntuples/
+```
+
+Files with unexpected names are moved to `other_root/`.
+
+For jobs that run on CHTC-style workers, `/nfs_scratch` is not mounted inside
+the job. In that case the job logs a warning for direct copies and relies on
+Condor's output transfer tarball. This is expected.
+
 ### Hadding Outputs
 
 The flat outputs can be hadded normally:
 
 ```bash
-hadd -f flat_signal_8b.root /hdfs/store/user/pkhalili2/ML-MINIAOD-Processing/signal_8b/flat_signal_8b_*.root
+bash condor/unpack_outputs.sh /nfs_scratch/pkhalili2/ak15_condor_outputs/signal_8b
+hadd -f flat_signal_8b.root /nfs_scratch/pkhalili2/ak15_condor_outputs/signal_8b/flat_ntuples/*.root
 ```
+
+To keep training inputs bounded in size, use the size-capped hadd helper. This
+groups input ROOT files by their summed input size and writes as many
+consolidated files as needed:
+
+```bash
+source /cvmfs/cms.cern.ch/cmsset_default.sh
+cmsenv
+
+bash condor/hadd_by_size.sh \
+  /nfs_scratch/pkhalili2/ak15_condor_outputs/signal_8b/flat_ntuples \
+  /nfs_scratch/pkhalili2/ak15_condor_outputs/signal_8b/hadd_flat \
+  flat_signal_8b \
+  6G
+
+bash condor/hadd_by_size.sh \
+  /nfs_scratch/pkhalili2/ak15_condor_outputs/signal_8b/nano_ntuples \
+  /nfs_scratch/pkhalili2/ak15_condor_outputs/signal_8b/hadd_nano \
+  nano_signal_8b \
+  6G
+```
+
+The `6G` limit controls the approximate input bytes per `hadd` group. The
+final output size can differ because ROOT compression changes during hadding.
 
 `hadd` preserves the tree branches. Since `inputEntry` is local to the enriched
 NanoAOD file processed by one Condor chunk, keep `sourceLabel` in the flat tree
@@ -955,21 +1017,3 @@ AK15NanoFlatTreeProducer_C_ACLiC_dict_rdict.pcm
 ```
 
 The ROOT files are analysis outputs. The `AK15NanoFlatTreeProducer_C.*` files are ROOT ACLiC build products and can be regenerated.
-
-## Publishing to GitHub
-
-This CMSSW `src` directory is the project root for the GitHub repository. To
-publish it to `Pkhalili2/ML-MINIAOD-Processing` after reviewing the changes:
-
-```bash
-git remote add origin git@github.com:Pkhalili2/ML-MINIAOD-Processing.git
-git add .gitignore README.md NanoIncludingAK15_UL18NanoAODv2_OnlyNano_mc_cfg.py \
-  AK15NanoFlatTreeProducer.C run_ak15_nano_flat_tree.sh run_nano_from_txt.sh \
-  MyAnalysis JMEAnalysis condor scripts
-git commit -m "Add AK15 Condor batch workflow"
-git branch -M main
-git push --force-with-lease origin main
-```
-
-Use `--force-with-lease` only if the intent is to replace the outdated contents
-of the remote repository with this working project state.

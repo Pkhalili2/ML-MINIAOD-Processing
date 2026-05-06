@@ -16,6 +16,7 @@ condor/outputs/
 condor/test_outputs/
 condor/package.tgz
 job_report_*.txt
+root_outputs_*.tgz
 
 # Local editor/cache files
 __pycache__/

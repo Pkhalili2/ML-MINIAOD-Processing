@@ -13,6 +13,7 @@ LIMIT_FILES="0"
 LIMIT_JOBS="0"
 MAX_EVENTS="-1"
 OUTPUT_DIR=""
+RETURN_DIR=""
 SAVE_NANO="1"
 USE_X509="0"
 REQUIRE_HDFS="auto"
@@ -38,6 +39,7 @@ Options:
   --limit-jobs N                 Use only the first N generated jobs
   --max-events N                 Stage 1 maxEvents, or Stage 2 maxEvents in phase2 mode
   --output-dir PATH_OR_URL       Default: /nfs_scratch/$USER/ak15_condor_outputs/TAG
+  --return-dir PATH              Submit-side directory for Condor-transferred ROOT tarballs
   --save-nano 0|1                Copy enriched NanoAOD outputs for phase1/both
   --use-x509                    Transfer your current VOMS proxy with the jobs
   --require-hdfs 0|1|auto        Default: auto
@@ -63,6 +65,7 @@ while [[ $# -gt 0 ]]; do
     --limit-jobs) LIMIT_JOBS="$2"; shift 2 ;;
     --max-events) MAX_EVENTS="$2"; shift 2 ;;
     --output-dir) OUTPUT_DIR="$2"; shift 2 ;;
+    --return-dir) RETURN_DIR="$2"; shift 2 ;;
     --save-nano) SAVE_NANO="$2"; shift 2 ;;
     --use-x509) USE_X509="1"; shift ;;
     --require-hdfs) REQUIRE_HDFS="$2"; shift 2 ;;
@@ -91,9 +94,16 @@ fi
 if [[ -z "${OUTPUT_DIR}" ]]; then
   OUTPUT_DIR="${AK15_OUTPUT_BASE:-/nfs_scratch/${USER}/ak15_condor_outputs}/${TAG}"
 fi
+if [[ -z "${RETURN_DIR}" ]]; then
+  case "${OUTPUT_DIR}" in
+    /*) RETURN_DIR="${OUTPUT_DIR}" ;;
+    *) RETURN_DIR="${REPO_ROOT}/condor/.returned/${TAG}" ;;
+  esac
+fi
 
 cd "${REPO_ROOT}"
 mkdir -p condor/.logs
+mkdir -p "${RETURN_DIR}"
 case "${OUTPUT_DIR}" in
   root://*|davs://*|gsiftp://*) ;;
   *) mkdir -p "${OUTPUT_DIR}" ;;
@@ -107,6 +117,7 @@ make_args=(
   --files-per-job "${FILES_PER_JOB}"
   --max-events "${MAX_EVENTS}"
   --output-dir "${OUTPUT_DIR}"
+  --return-dir "${RETURN_DIR}"
   --save-nano "${SAVE_NANO}"
   --require-hdfs "${REQUIRE_HDFS}"
   --cmssw-version "${CMSSW_VERSION}"
@@ -142,6 +153,7 @@ echo
 echo "Prepared $(wc -l < "${JOB_TABLE}") jobs."
 echo "Job table: ${JOB_TABLE}"
 echo "Output dir: ${OUTPUT_DIR}"
+echo "Condor transfer return dir: ${RETURN_DIR}"
 
 if [[ "${NO_SUBMIT}" == "1" ]]; then
   echo "Not submitting because --no-submit was requested."

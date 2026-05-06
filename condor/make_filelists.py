@@ -29,6 +29,11 @@ def parse_args():
     parser.add_argument("--limit-jobs", type=int, default=0)
     parser.add_argument("--max-events", default="-1")
     parser.add_argument("--output-dir", required=True)
+    parser.add_argument(
+        "--return-dir",
+        default="",
+        help="Submit-side directory where Condor should transfer the ROOT output tarball.",
+    )
     parser.add_argument("--save-nano", choices=("0", "1"), default="1")
     parser.add_argument("--use-x509", action="store_true")
     parser.add_argument(
@@ -95,7 +100,7 @@ def run_dasgoclient(dataset):
         check=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True,
+        universal_newlines=True,
     )
     return [line.strip() for line in completed.stdout.splitlines() if line.strip()]
 
@@ -152,6 +157,12 @@ def requires_hdfs(entries, output_dir, setting):
     return "0"
 
 
+def default_return_dir(output_dir, root, tag):
+    if output_dir.startswith("/"):
+        return output_dir
+    return str(root / "condor" / ".returned" / tag)
+
+
 def chunk_entries(entries, size):
     for start in range(0, len(entries), size):
         yield entries[start : start + size]
@@ -188,6 +199,7 @@ def main():
         chunks = chunks[: args.limit_jobs]
 
     hdfs_flag = requires_hdfs(entries, args.output_dir, args.require_hdfs)
+    return_dir = args.return_dir or default_return_dir(args.output_dir, root, args.tag)
     job_table = generated / "job_table.txt"
     manifest = {
         "created_utc": datetime.utcnow().isoformat(timespec="seconds") + "Z",
@@ -198,6 +210,7 @@ def main():
         "files_per_job": args.files_per_job,
         "jobs": [],
         "output_dir": args.output_dir,
+        "return_dir": return_dir,
         "save_nano": args.save_nano,
         "use_x509": args.use_x509,
         "require_hdfs": hdfs_flag,
@@ -226,6 +239,7 @@ def main():
                 hdfs_flag,
                 args.cmssw_version,
                 args.scram_arch,
+                return_dir,
             ]
             table.write(" ".join(row) + "\n")
             manifest["jobs"].append(

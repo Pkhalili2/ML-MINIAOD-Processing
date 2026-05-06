@@ -6,7 +6,8 @@ when_to_transfer_output = ON_EXIT
 preserve_relative_paths = True
 
 transfer_input_files    = condor/package.tgz, $(INPUT_LIST)
-transfer_output_files   = job_report_$(DATASET_TAG)_$(CHUNK_ID).txt
+transfer_output_files   = job_report_$(DATASET_TAG)_$(CHUNK_ID).txt, root_outputs_$(DATASET_TAG)_$(CHUNK_ID).tgz
+transfer_output_remaps  = "root_outputs_$(DATASET_TAG)_$(CHUNK_ID).tgz = $(RETURN_DIR)/root_outputs_$(DATASET_TAG)_$(CHUNK_ID).tgz"
 
 output                  = condor/.logs/$(DATASET_TAG)_$(CHUNK_ID).out
 error                   = condor/.logs/$(DATASET_TAG)_$(CHUNK_ID).err
@@ -28,4 +29,4 @@ use_x509userproxy       = $(USE_X509)
 
 arguments               = $(DATASET_TAG) $(CHUNK_ID) $(INPUT_LIST) $(MODE) $(IS_SIGNAL) $(MAX_EVENTS) $(OUTPUT_DIR) $(SAVE_NANO) $(USE_X509) $(REQUIRE_HDFS) $(CMSSW_VERSION) $(SCRAM_ARCH)
 
-queue DATASET_TAG CHUNK_ID INPUT_LIST MODE IS_SIGNAL MAX_EVENTS OUTPUT_DIR SAVE_NANO USE_X509 REQUIRE_HDFS CMSSW_VERSION SCRAM_ARCH from $(JOB_TABLE)
+queue DATASET_TAG CHUNK_ID INPUT_LIST MODE IS_SIGNAL MAX_EVENTS OUTPUT_DIR SAVE_NANO USE_X509 REQUIRE_HDFS CMSSW_VERSION SCRAM_ARCH RETURN_DIR from $(JOB_TABLE)

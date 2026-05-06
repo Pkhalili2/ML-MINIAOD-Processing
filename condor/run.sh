@@ -29,7 +29,9 @@ esac
 
 JOBDIR="${_CONDOR_SCRATCH_DIR:-$(pwd)}"
 REPORT="job_report_${DATASET_TAG}_${CHUNK_ID}.txt"
+OUTPUT_TARBALL="root_outputs_${DATASET_TAG}_${CHUNK_ID}.tgz"
 BUILD_CPUS="${BUILD_CPUS:-${_CONDOR_NPROCS:-1}}"
+STAGED_OUTPUTS=()
 
 cd "${JOBDIR}"
 
@@ -151,11 +153,33 @@ copy_output() {
       gfal-copy -f "${src}" "${dest}"
       ;;
     *)
-      mkdir -p "${OUTPUT_DIR}"
-      cp -f "${src}" "${dest}"
+      if ! mkdir -p "${OUTPUT_DIR}" 2>/dev/null || ! cp -f "${src}" "${dest}" 2>/dev/null; then
+        echo "WARNING: could not copy ${src} directly to ${dest}; relying on Condor output transfer tarball."
+        return 0
+      fi
       ;;
   esac
   echo "Copied ${src} -> ${dest}"
+}
+
+stage_output_for_transfer() {
+  local src="$1"
+  local stable_name="$2"
+  cp -f "${src}" "${JOBDIR}/${stable_name}"
+  STAGED_OUTPUTS+=("${stable_name}")
+  echo "Staged ${src} for Condor output transfer as ${stable_name}"
+}
+
+write_output_tarball() {
+  cd "${JOBDIR}"
+  if [[ "${#STAGED_OUTPUTS[@]}" -gt 0 ]]; then
+    tar -czf "${OUTPUT_TARBALL}" "${STAGED_OUTPUTS[@]}"
+    echo "Created Condor output transfer tarball: ${OUTPUT_TARBALL}"
+    tar -tzf "${OUTPUT_TARBALL}"
+  else
+    tar -czf "${OUTPUT_TARBALL}" --files-from /dev/null
+    echo "Created empty Condor output transfer tarball: ${OUTPUT_TARBALL}"
+  fi
 }
 
 source /cvmfs/cms.cern.ch/cmsset_default.sh
@@ -196,6 +220,7 @@ if [[ "${MODE}" == "phase1" || "${MODE}" == "both" ]]; then
   fi
 
   if [[ "${MODE}" == "phase1" || "${SAVE_NANO}" == "1" ]]; then
+    stage_output_for_transfer "${NANO_FILE}" "nano_${DATASET_TAG}_${CHUNK_ID}.root"
     copy_output "${NANO_FILE}" "$(basename "${NANO_FILE}")"
   fi
 fi
@@ -223,10 +248,12 @@ if [[ "${MODE}" == "phase2" || "${MODE}" == "both" ]]; then
     echo "ERROR: Stage 2 did not produce ${flat_file}"
     exit 8
   fi
+  stage_output_for_transfer "${flat_file}" "${flat_file}"
   copy_output "${flat_file}" "${flat_file}"
 fi
 
 echo "Final local ROOT outputs:"
 ls -lh ./*.root 2>/dev/null || true
+write_output_tarball
 echo "Done."
 date -u
