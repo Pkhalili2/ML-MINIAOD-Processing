@@ -1,6 +1,5 @@
 universe                = vanilla
 executable              = /bin/bash
-AK15_LEADING_ONLY       = 0
 
 should_transfer_files   = YES
 when_to_transfer_output = ON_EXIT
