@@ -1,0 +1,41 @@
+universe                = vanilla
+executable              = /bin/bash
+AK15_LEADING_ONLY       = 0
+
+should_transfer_files   = YES
+when_to_transfer_output = ON_EXIT
+preserve_relative_paths = False
+transfer_executable    = False
+
+transfer_input_files    = condor/package.tgz, condor_bootstrap.sh, $(INPUT_LIST)
+transfer_output_files   = root_outputs_$(DATASET_TAG)_$(CHUNK_ID).tgz
+transfer_output_remaps  = "root_outputs_$(DATASET_TAG)_$(CHUNK_ID).tgz = $(RETURN_DIR)/root_outputs_$(DATASET_TAG)_$(CHUNK_ID).tgz"
+
+output                  = condor/.logs/$(DATASET_TAG)_$(CHUNK_ID).out
+error                   = condor/.logs/$(DATASET_TAG)_$(CHUNK_ID).err
+log                     = condor/.logs/$(DATASET_TAG)_$(CHUNK_ID).log
+
+request_cpus            = 1
+request_memory          = 4 GB
+request_disk            = $(AK15_REQUEST_DISK)
+
+# A nonzero payload exit should not look like a completed production chunk.
+# Retry it a small number of times, then leave it held for inspection.
+on_exit_hold            = (ExitBySignal =?= True) || (ExitCode =!= 0)
+periodic_release        = (JobStatus == 5) && (NumJobStarts <= $(AK15_MAX_RETRIES))
+
+# run.sh uses the CMSSW RHEL7 Singularity/Apptainer image when available, so
+# the submit expression only requires HDFS when needed plus a healthy CVMFS.
+requirements            = ($(REQUIRE_HDFS) == 0 || (TARGET.HAS_CMS_HDFS =?= True)) && ((TARGET.CMS_CVMFS_Exists =?= True) || (TARGET.HAS_CMS_CVMFS =?= True))
+
+use_x509userproxy       = $(USE_X509)
+
++JobBatchName           = "ak15_$(DATASET_TAG)_$(MODE)"
++NoAutoRequirements     = True
++RequiresCVMFS          = True
++WantFlocking           = True
++FlockTo                = "cm.chtc.wisc.edu"
+
+arguments               = condor_bootstrap.sh $(DATASET_TAG) $(CHUNK_ID) $(INPUT_LIST) $(MODE) $(IS_SIGNAL) $(MAX_EVENTS) $(OUTPUT_DIR) $(SAVE_NANO) $(USE_X509) $(REQUIRE_HDFS) $(CMSSW_VERSION) $(SCRAM_ARCH) $(CONFIG_TYPE) 0 $(AK15_LEADING_ONLY)
+
+queue DATASET_TAG CHUNK_ID INPUT_LIST MODE CONFIG_TYPE IS_SIGNAL MAX_EVENTS OUTPUT_DIR SAVE_NANO USE_X509 REQUIRE_HDFS CMSSW_VERSION SCRAM_ARCH RETURN_DIR from $(JOB_TABLE)

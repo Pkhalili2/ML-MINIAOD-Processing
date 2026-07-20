@@ -1,0 +1,276 @@
+# AK15 NanoAOD and Analysis Workflow
+
+This repository produces constituent-enriched AK15 NanoAOD files from 2018
+MiniAOD, reduces them to compact jet-level or analysis-level ROOT files, and
+runs the corresponding HTCondor workflows.
+
+The supported runtime is:
+
+- `CMSSW_10_6_17`
+- `SCRAM_ARCH=slc7_amd64_gcc700`
+- an EL7-compatible CMS worker environment
+- Python 3 for input discovery and metadata tools
+- ROOT from the CMSSW release for the C++ reducers and plotting
+
+## Repository Layout
+
+```text
+MyAnalysis/AK15NanoExtras/       CMSSW plugins for AK15 tables and leading-jet selection
+JMEAnalysis/JetToolbox/          JetToolbox package used to build the AK15 collection
+config/                          Event selection, luminosity mask, and sample metadata
+condor/                          Dataset discovery, packaging, worker wrappers, and submit files
+scripts/                         Luminosity, normalization, event-count, and plotting utilities
+NanoIncludingAK15_*.py           Data and MC NanoAOD configurations
+AK15NanoFlatTreeProducer.C       Phase-2 ML-oriented reducer
+PhysicsAnalysisTreeProducer.C    Compact muon-plus-AK15 analysis reducer
+```
+
+Generated Condor state, ROOT files, compiled ROOT macros, caches, and returned
+tarballs are excluded from version control.
+
+## CMSSW Setup
+
+Run the workflow on an EL7-compatible CMS machine.
+
+```bash
+export SCRAM_ARCH=slc7_amd64_gcc700
+source /cvmfs/cms.cern.ch/cmsset_default.sh
+cmsrel CMSSW_10_6_17
+cd CMSSW_10_6_17/src
+git clone <repository-url> .
+cmsenv
+scram b -j8
+```
+
+For an existing checkout:
+
+```bash
+cd /path/to/CMSSW_10_6_17/src
+source /cvmfs/cms.cern.ch/cmsset_default.sh
+cmsenv
+scram b -j8
+```
+
+Remote CMS inputs require a valid proxy:
+
+```bash
+voms-proxy-init --voms cms --valid 144:00
+voms-proxy-info -timeleft
+```
+
+## Stage 1: AK15 NanoAOD
+
+The data and MC configurations recluster CHS AK15 jets, write the standard
+NanoAOD tables, and add custom AK15 jet and constituent tables.
+
+Run a short local data test:
+
+```bash
+cmsRun NanoIncludingAK15_UL18NanoAODv2_OnlyNano_data_cfg.py \
+  inputFiles=file:/path/to/input_miniaod.root \
+  outputFile=output.root \
+  maxEvents=100 \
+  ak15LeadingOnly=True
+```
+
+Run an MC test:
+
+```bash
+cmsRun NanoIncludingAK15_UL18NanoAODv2_OnlyNano_mc_cfg.py \
+  inputFiles=root://cms-xrd-global.cern.ch//store/path/input.root \
+  outputFile=output.root \
+  maxEvents=100 \
+  ak15LeadingOnly=True
+```
+
+`ak15LeadingOnly=True` keeps the globally highest-\(p_T\) AK15 jet in each
+event and stores its PF and generator-level constituents. It does not apply
+analysis kinematic or lepton cuts. The original row in the unreduced AK15
+collection is recorded as `SuperFatJetAK15_leadingAK15SourceJetIdx`, and the
+original jet multiplicity is recorded as
+`SuperFatJetAK15_originalAK15Multiplicity`. The soft-drop subjet table is
+restricted to subjets referenced by the leading jet and records both the
+parent row and original subjet row.
+
+The standard NanoAOD tables are unchanged by this option. Only the custom AK15
+jet, soft-drop subjet, PF-constituent, and generator-constituent tables are
+reduced.
+
+`ak15LeadingOnly=False` retains the full custom AK15 jet and constituent
+collections.
+
+## Stage 2: ML-Oriented Reduction
+
+`AK15NanoFlatTreeProducer.C` applies the jet selection used by the ML
+preprocessing and writes a compact ROOT tree with one selected jet and its
+constituent features.
+
+```bash
+bash run_ak15_nano_flat_tree.sh \
+  input_nano.root \
+  output_flat.root \
+  0 \
+  -1 \
+  sample_label
+```
+
+The positional arguments after the output are `isSignal`, `maxEvents`, and
+`sourceLabel`. Input can also be a text list prefixed with `@`.
+
+For leading-only NanoAOD, the selected jet row is normally zero.
+`selectedSourceJetIdx` preserves the original AK15 row before Stage-1
+reduction.
+
+## Compact Physics Analysis
+
+`PhysicsAnalysisTreeProducer.C` creates small ROOT products for cutflows and
+data/MC plots. The default cumulative selection is:
+
+1. readable event;
+2. certified run and luminosity section for data;
+3. at least one input muon;
+4. highest-\(p_T\) muon with \(p_T>30\) GeV, \(|\eta|<2.5\), and relative
+   isolation below 0.3;
+5. at least one AK15 jet and identify the global highest-\(p_T\) AK15 jet;
+6. require that leading jet to have \(p_T>200\) GeV and \(|\eta|<3.0\);
+7. require \(|\Delta\phi(\mu,\mathrm{leading\ AK15})|>1.5\);
+8. write the selected event.
+
+The defaults are in `config/analysis_muon_2018.json` and can be overridden on
+the command line:
+
+```bash
+bash run_physics_analysis_tree.sh \
+  input_nano.root \
+  analysis.root \
+  --config config/analysis_muon_2018.json \
+  --sample WJets_HT100to200 \
+  --is-data 0 \
+  --max-events -1
+```
+
+Use `--is-data 1` for collision data. The configured CMS Golden JSON is
+applied only to data.
+
+## Stage-1 Condor Submission
+
+The submitter accepts a DAS dataset, directory, glob, text list, ROOT file, or
+xrootd URL. Always prepare a one-job smoke test before a production campaign.
+
+```bash
+bash condor/submit_all.sh \
+  --tag wjets_ht200to400_smoke \
+  --input /WJetsToLNu_HT-200To400_TuneCP5_13TeV-madgraphMLM-pythia8/RunIISummer20UL18MiniAODv2-106X_upgrade2018_realistic_v16_L1v1-v1/MINIAODSIM \
+  --mode phase1 \
+  --config-type mc \
+  --is-signal 0 \
+  --files-per-job 1 \
+  --limit-jobs 1 \
+  --max-events 100 \
+  --ak15-leading-only 1 \
+  --use-x509 \
+  --output-dir /hdfs/store/user/$USER/AK15/WJets_HT200to400 \
+  --return-dir /nfs_scratch/$USER/ak15_returns/WJets_HT200to400 \
+  --no-submit
+```
+
+Remove `--no-submit` after inspecting the generated table under
+`condor/.generated/<tag>/`. Use `--dry-run` to render the final ClassAd without
+submitting it.
+
+Important settings:
+
+| Option | Purpose |
+| --- | --- |
+| `--mode phase1\|phase2\|both` | Select Nano production, flat reduction, or both |
+| `--config-type mc\|data` | Select the MC or data Nano configuration |
+| `--files-per-job N` | Number of source files assigned to each process |
+| `--limit-files N` | Restrict the campaign to the first `N` discovered files |
+| `--limit-jobs N` | Restrict the number of generated processes |
+| `--max-events N` | Event limit per job; `-1` processes all events |
+| `--ak15-leading-only 0\|1` | Keep all AK15 jets or only the leading jet |
+| `--save-nano 0\|1` | Persist the Stage-1 Nano output |
+| `--use-x509` | Transfer the current CMS VOMS proxy |
+| `--require-hdfs 0\|1\|auto` | Require a worker with the HDFS mount |
+| `--input-prefix` | Control local, HDFS-xrootd, or unmodified input paths |
+| `--request-disk` | Condor scratch request in KB for Stage 1 |
+| `--max-retries` | Automatic retries after nonzero payload exits |
+
+Physics outputs should normally be written to HDFS. Condor logs and compact
+return tarballs can be kept under NFS.
+
+## Analysis Condor Submission
+
+The compact analysis submitter can read HDFS files through xrootd and prefetch
+each source file with the worker host before entering the EL7 CMSSW runtime.
+
+```bash
+bash condor/submit_analysis_all.sh \
+  --tag wjets_ht100to200_analysis \
+  --input '/hdfs/store/user/'"$USER"'/AK15/WJets_HT100to200/nano_*.root' \
+  --output-dir /nfs_scratch/$USER/ak15_analysis/WJets_HT100to200 \
+  --files-per-job 1 \
+  --is-data 0 \
+  --input-prefix xrootd-wisc \
+  --prefetch-xrootd \
+  --use-x509 \
+  --require-hdfs 0 \
+  --limit-jobs 1 \
+  --max-events 100
+```
+
+Use one source file per job when prefetching multi-GB Nano files so the worker
+scratch request remains predictable.
+
+## Luminosity and Weighted Plots
+
+Collect unique data run/luminosity sections:
+
+```bash
+python scripts/collect_analysis_lumis.py \
+  /path/to/data/analysis_*.root \
+  --output processed_lumis.json
+```
+
+Evaluate the recorded luminosity with the official CMS luminosity tools and
+normtag, then pass the resulting value in inverse picobarns to the plotter.
+
+Prepare a metadata table from the example:
+
+```bash
+cp config/samples_2018.example.csv config/samples_2018.csv
+```
+
+Update each input path, cross section, and generator-weight sum, then run:
+
+```bash
+python scripts/make_weighted_plots.py \
+  --metadata config/samples_2018.csv \
+  --output-dir plots/physics_analysis \
+  --lumi-pb <recorded-luminosity-pb>
+```
+
+Data events use unit weight. Simulated events use
+
+```text
+event weight = genWeight * luminosity * cross section / sumGenWeights
+```
+
+The plotting script stacks backgrounds, overlays data and signal, draws the MC
+statistical uncertainty, writes cumulative cutflow and normalization CSV
+files, and adds a `Data / sum(MC)` lower panel.
+
+## Validation
+
+Before expanding a campaign:
+
+1. compile the CMSSW plugins;
+2. run 10-100 events locally;
+3. confirm the output ROOT file opens and contains the expected tables;
+4. submit one Condor process;
+5. inspect its event log, stdout, stderr, exit code, and returned tarball;
+6. verify the requested HDFS and NFS destinations;
+7. estimate logical and replicated storage before increasing the job count.
+
+Do not treat a completed Condor process as successful until its returned ROOT
+content has been validated.

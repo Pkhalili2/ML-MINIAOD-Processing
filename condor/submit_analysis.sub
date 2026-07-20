@@ -1,0 +1,44 @@
+universe                = vanilla
+executable              = /bin/bash
+
+should_transfer_files   = YES
+when_to_transfer_output = ON_EXIT
+preserve_relative_paths = False
+transfer_executable     = False
+
+transfer_input_files    = condor/package.tgz,condor_analysis_bootstrap.sh,$(INPUT_LIST),$(EXTRA_INPUT_FILES)
+transfer_output_files   = analysis_outputs_$(DATASET_TAG)_$(CHUNK_ID).tgz
+transfer_output_remaps  = "analysis_outputs_$(DATASET_TAG)_$(CHUNK_ID).tgz = $(RETURN_DIR)/analysis_outputs_$(DATASET_TAG)_$(CHUNK_ID).tgz"
+
+output                  = condor/.logs/analysis_$(DATASET_TAG)_$(CHUNK_ID).out
+error                   = condor/.logs/analysis_$(DATASET_TAG)_$(CHUNK_ID).err
+log                     = condor/.logs/analysis_$(DATASET_TAG)_$(CHUNK_ID).log
+
+request_cpus            = 1
+request_memory          = 4 GB
+request_disk            = $(AK15_REQUEST_DISK)
+
+on_exit_hold            = (ExitBySignal =?= True) || (ExitCode =!= 0)
+periodic_release        = (JobStatus == 5) && (NumJobStarts <= $(AK15_MAX_RETRIES))
+
+requirements            = ($(REQUIRE_HDFS) == 0 || (TARGET.HAS_CMS_HDFS =?= True)) && ((TARGET.CMS_CVMFS_Exists =?= True) || (TARGET.HAS_CMS_CVMFS =?= True))
+
+use_x509userproxy       = $(USE_X509)
+environment             = "XrdSecPROTOCOL=gsi AK15_PREFETCH_XROOTD=$(AK15_PREFETCH_XROOTD:0)"
+
++JobBatchName           = "ak15_analysis_$(DATASET_TAG)"
++ProjectName            = "UWMadison_HEP"
++ChtcProjects           = "UWMadison_HEP"
++NoAutoRequirements     = True
++RequiresCVMFS          = True
++WantFlocking           = True
++WantGlidein            = True
++FlockTo                = "cm.chtc.wisc.edu"
++Ak15SourceMode         = "$(MODE)"
++Ak15SourceConfigType   = "$(CONFIG_TYPE)"
++Ak15SourceIsSignal     = "$(IS_SIGNAL)"
++Ak15SourceSaveNano     = "$(SAVE_NANO)"
+
+arguments               = condor_analysis_bootstrap.sh $(DATASET_TAG) $(CHUNK_ID) $(INPUT_LIST) $(OUTPUT_DIR) $(MAX_EVENTS) $(CMSSW_VERSION) $(SCRAM_ARCH) $(ANALYSIS_CONFIG) $(SAMPLE_LABEL) $(IS_DATA_ANALYSIS) $(JET_PT_MIN) $(JET_ETA_MAX) $(LEPTON_MODE) $(MUON_PT_MIN) $(MUON_ETA_MAX) $(MUON_ISO_MAX) $(MIN_DPHI) $(MUON_ISO_BRANCH)
+
+queue DATASET_TAG CHUNK_ID INPUT_LIST MODE CONFIG_TYPE IS_SIGNAL MAX_EVENTS OUTPUT_DIR SAVE_NANO USE_X509 REQUIRE_HDFS CMSSW_VERSION SCRAM_ARCH RETURN_DIR EXTRA_INPUT_FILES from $(JOB_TABLE)
