@@ -29,12 +29,21 @@ periodic_release        = (JobStatus == 5) && (NumJobStarts <= $(AK15_MAX_RETRIE
 requirements            = ($(REQUIRE_HDFS) == 0 || (TARGET.HAS_CMS_HDFS =?= True)) && ((TARGET.CMS_CVMFS_Exists =?= True) || (TARGET.HAS_CMS_CVMFS =?= True))
 
 use_x509userproxy       = $(USE_X509)
+environment             = "XrdSecPROTOCOL=gsi"
 
 +JobBatchName           = "ak15_$(DATASET_TAG)_$(MODE)"
++ProjectName            = "UWMadison_HEP"
++ChtcProjects           = "UWMadison_HEP"
 +NoAutoRequirements     = True
 +RequiresCVMFS          = True
 +WantFlocking           = True
++WantGlidein            = True
 +FlockTo                = "cm.chtc.wisc.edu"
++Ak15SourceMode         = "$(MODE)"
++Ak15SourceConfigType   = "$(CONFIG_TYPE)"
++Ak15SourceIsSignal     = "$(IS_SIGNAL)"
++Ak15SourceSaveNano     = "$(SAVE_NANO)"
++Ak15LeadingOnly        = "$(AK15_LEADING_ONLY)"
 
 arguments               = condor_bootstrap.sh $(DATASET_TAG) $(CHUNK_ID) $(INPUT_LIST) $(MODE) $(IS_SIGNAL) $(MAX_EVENTS) $(OUTPUT_DIR) $(SAVE_NANO) $(USE_X509) $(REQUIRE_HDFS) $(CMSSW_VERSION) $(SCRAM_ARCH) $(CONFIG_TYPE) 0 $(AK15_LEADING_ONLY)
 
