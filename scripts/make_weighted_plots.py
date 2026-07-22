@@ -620,6 +620,7 @@ def draw_stack_plot(
 
     canvas.SaveAs(os.path.join(output_dir, key + suffix + ".png"))
     canvas.SaveAs(os.path.join(output_dir, key + suffix + ".pdf"))
+    canvas.Close()
 
 
 def cutflow_hist(ROOT, name, values):
@@ -686,6 +687,7 @@ def draw_efficiency_plot(ROOT, rows, output_dir):
     )
     canvas.SaveAs(os.path.join(output_dir, "cutflow_efficiency.png"))
     canvas.SaveAs(os.path.join(output_dir, "cutflow_efficiency.pdf"))
+    canvas.Close()
 
 
 def main():
