@@ -1,0 +1,38 @@
+universe                = vanilla
+executable              = /bin/bash
+
+should_transfer_files   = YES
+when_to_transfer_output = ON_EXIT
+transfer_executable     = False
+
+transfer_input_files    = condor/package.tgz,condor_reduce_bootstrap.sh,$(INPUT_LIST)
+transfer_output_files   = reduced_outputs_$(TAG)_$(CHUNK).tgz
+transfer_output_remaps  = "reduced_outputs_$(TAG)_$(CHUNK).tgz = $(RETURN_DIR)/reduced_outputs_$(TAG)_$(CHUNK).tgz"
+
+output                  = condor/.logs/reduce_$(TAG)_$(CHUNK).out
+error                   = condor/.logs/reduce_$(TAG)_$(CHUNK).err
+log                     = condor/.logs/reduce_$(TAG)_$(CHUNK).log
+
+request_cpus            = 1
+request_memory          = 4 GB
+request_disk            = $(AK15_REQUEST_DISK)
+
+on_exit_hold            = (ExitBySignal =?= True) || (ExitCode =!= 0)
+periodic_release        = (JobStatus == 5) && (NumJobStarts <= $(AK15_MAX_RETRIES))
+requirements            = ((TARGET.CMS_CVMFS_Exists =?= True) || (TARGET.HAS_CMS_CVMFS =?= True))
+
+use_x509userproxy       = True
+environment             = "XrdSecPROTOCOL=gsi"
+
++JobBatchName           = "ak15_reduce_$(TAG)"
++ProjectName            = "UWMadison_HEP"
++ChtcProjects           = "UWMadison_HEP"
++NoAutoRequirements     = True
++RequiresCVMFS          = True
++WantFlocking           = True
++WantGlidein            = True
++FlockTo                = "cm.chtc.wisc.edu"
+
+arguments = condor_reduce_bootstrap.sh $(TAG) $(CHUNK) $(INPUT_LIST) $(MAX_EVENTS) $(CMSSW_VERSION) $(SCRAM_ARCH) $(OUTPUT_NAME)
+
+queue TAG CHUNK INPUT_LIST MAX_EVENTS CMSSW_VERSION SCRAM_ARCH OUTPUT_NAME RETURN_DIR from $(JOB_TABLE)

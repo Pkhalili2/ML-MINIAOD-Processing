@@ -123,7 +123,7 @@ process.NjettinessAK15 = Njettiness.clone(
 
 process.leadingPatJetsAK15PFCHS = cms.EDProducer(
     "LeadingAK15JetProducer",
-    src = cms.InputTag("selectedPatJetsAK15PFCHS"),
+    src = cms.InputTag("packedPatJetsAK15PFCHSSoftDrop"),
     sourceIndexName = cms.string("leadingAK15SourceJetIdx"),
     sourceMultiplicityName = cms.string("originalAK15Multiplicity"),
 )
@@ -189,7 +189,7 @@ process.genJetAK15Table = cms.EDProducer("SimpleCandidateFlatTableProducer",
 from PhysicsTools.NanoAOD.common_cff import Var
 
 process.subjetTable = cms.EDProducer("SimpleCandidateFlatTableProducer",
-    src = cms.InputTag("selectedPatJetsAK15PFCHSSoftDropPacked"),
+    src = cms.InputTag("selectedPatJetsAK15PFCHSSoftDropPacked", "SubJets"),
     cut = cms.string(""),
     name = cms.string("SuperFat_SubJetAK8"),
     doc = cms.string("Softdrop subjets"),

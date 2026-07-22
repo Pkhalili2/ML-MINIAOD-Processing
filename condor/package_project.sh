@@ -14,9 +14,12 @@ required=(
   "NanoIncludingAK15_UL18NanoAODv2_OnlyNano_data_cfg.py"
   "AK15NanoFlatTreeProducer.C"
   "PhysicsAnalysisTreeProducer.C"
+  "ReduceAK15NanoToLeading.C"
   "run_ak15_nano_flat_tree.sh"
+  "run_reduce_ak15_nano_to_leading.sh"
   "condor/run.sh"
   "condor/run_analysis.sh"
+  "condor/run_reduce_existing.sh"
   "run_physics_analysis_tree.sh"
   "config/analysis_muon_2018.json"
   "config/samples_2018.example.csv"
@@ -47,9 +50,12 @@ tar \
   NanoIncludingAK15_UL18NanoAODv2_OnlyNano_data_cfg.py \
   AK15NanoFlatTreeProducer.C \
   PhysicsAnalysisTreeProducer.C \
+  ReduceAK15NanoToLeading.C \
   run_ak15_nano_flat_tree.sh \
+  run_reduce_ak15_nano_to_leading.sh \
   condor/run.sh \
   condor/run_analysis.sh \
+  condor/run_reduce_existing.sh \
   run_physics_analysis_tree.sh \
   config \
   scripts/count_events.py \

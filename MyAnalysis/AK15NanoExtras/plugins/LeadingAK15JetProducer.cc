@@ -45,7 +45,7 @@ public:
 
   static void fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
     edm::ParameterSetDescription description;
-    description.add<edm::InputTag>("src", edm::InputTag("selectedPatJetsAK15PFCHS"));
+    description.add<edm::InputTag>("src", edm::InputTag("packedPatJetsAK15PFCHSSoftDrop"));
     description.add<std::string>("sourceIndexName", "leadingAK15SourceJetIdx");
     description.add<std::string>("sourceMultiplicityName", "originalAK15Multiplicity");
     descriptions.add("LeadingAK15JetProducer", description);

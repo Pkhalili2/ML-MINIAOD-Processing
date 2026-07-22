@@ -99,6 +99,54 @@ reduced.
 `ak15LeadingOnly=False` retains the full custom AK15 jet and constituent
 collections.
 
+### Reducing Existing Full-AK15 NanoAOD
+
+Existing constituent-rich NanoAOD files can be converted without rerunning the
+MiniAOD production step. The reducer writes a new file and never modifies the
+input:
+
+```bash
+bash run_reduce_ak15_nano_to_leading.sh \
+  full_ak15_nano.root \
+  leading_only_nano.root
+```
+
+The output has the same event count and retains the ordinary NanoAOD trees and
+branches. It keeps the global highest-`pT` custom AK15 row and its PF and
+generator constituents. The original jet index and multiplicity are recorded
+in the same metadata branches used by native leading-only Stage 1 production.
+
+Legacy full-AK15 files produced by this repository used the default output of
+`selectedPatJetsAK15PFCHSSoftDropPacked` for `SuperFat_SubJetAK8`, rather than
+its `SubJets` product. Those rows have no recoverable parent-jet association.
+The reducer therefore preserves that small legacy table unchanged instead of
+inventing an association. Newly produced leading-only files use the corrected
+packed fat-jet source and contain the true associated SoftDrop subjets.
+
+The optional third argument limits events for smoke tests; production
+conversions should use the default `-1`.
+
+Validate a conversion before expanding it:
+
+```bash
+python scripts/validate_reduced_ak15_nano.py \
+  full_ak15_nano.root \
+  leading_only_nano.root
+```
+
+For multi-gigabyte files, submit one source file per Condor job:
+
+```bash
+bash condor/submit_reduce_existing.sh \
+  --tag wjets_ht100to200_leading_test \
+  --input-list config/full_ak15_inputs.txt \
+  --return-dir /nfs_scratch/$USER/wjets_ht100to200_leading_test \
+  --limit-files 3
+```
+
+Each returned tarball contains one new reduced ROOT file. Inputs are opened
+read-only and are never overwritten.
+
 ## Stage 2: ML-Oriented Reduction
 
 `AK15NanoFlatTreeProducer.C` applies the jet selection used by the ML
