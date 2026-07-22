@@ -26,6 +26,9 @@ SCRAM_ARCH="slc7_amd64_gcc700"
 XROOTD_PREFIX="root://cms-xrd-global.cern.ch//"
 HDFS_XROOTD_PREFIX="root://cmsxrootd.hep.wisc.edu//"
 INPUT_PREFIX="auto"
+PREFETCH_XROOTD="0"
+DIRECT_OUTPUT_TARBALL="auto"
+DIRECT_OUTPUT_FILES="0"
 DRY_RUN="0"
 NO_SUBMIT="0"
 CLEAR="1"
@@ -56,6 +59,10 @@ Options:
   --xrootd-prefix URL            Prefix for DAS /store files
   --hdfs-xrootd-prefix URL       Prefix for /hdfs/store files with --input-prefix xrootd-wisc
   --input-prefix auto|file|none|xrootd-wisc
+  --prefetch-xrootd               Copy xrootd inputs to worker scratch before CMSSW
+  --direct-output-tarball 0|1|auto
+                                  Default: 0 for phase2, 1 otherwise
+  --direct-output-files 0|1       Copy ROOT outputs directly to OUTPUT_DIR and return an audit tarball
   --dry-run                      Build the submit ClassAd without submitting
   --no-submit                    Prepare lists/package but do not call condor_submit
   --no-clear                     Keep old generated files for this tag
@@ -86,6 +93,9 @@ while [[ $# -gt 0 ]]; do
     --xrootd-prefix) XROOTD_PREFIX="$2"; shift 2 ;;
     --hdfs-xrootd-prefix) HDFS_XROOTD_PREFIX="$2"; shift 2 ;;
     --input-prefix) INPUT_PREFIX="$2"; shift 2 ;;
+    --prefetch-xrootd) PREFETCH_XROOTD="1"; shift ;;
+    --direct-output-tarball) DIRECT_OUTPUT_TARBALL="$2"; shift 2 ;;
+    --direct-output-files) DIRECT_OUTPUT_FILES="$2"; shift 2 ;;
     --dry-run) DRY_RUN="1"; shift ;;
     --no-submit) NO_SUBMIT="1"; shift ;;
     --no-clear) CLEAR="0"; shift ;;
@@ -105,6 +115,21 @@ fi
 
 if [[ "${AK15_LEADING_ONLY}" != "0" && "${AK15_LEADING_ONLY}" != "1" ]]; then
   echo "ERROR: --ak15-leading-only must be 0 or 1"
+  exit 2
+fi
+if [[ "${DIRECT_OUTPUT_TARBALL}" == "auto" ]]; then
+  if [[ "${MODE}" == "phase2" ]]; then
+    DIRECT_OUTPUT_TARBALL="0"
+  else
+    DIRECT_OUTPUT_TARBALL="1"
+  fi
+fi
+if [[ "${DIRECT_OUTPUT_TARBALL}" != "0" && "${DIRECT_OUTPUT_TARBALL}" != "1" ]]; then
+  echo "ERROR: --direct-output-tarball must be 0, 1, or auto"
+  exit 2
+fi
+if [[ "${DIRECT_OUTPUT_FILES}" != "0" && "${DIRECT_OUTPUT_FILES}" != "1" ]]; then
+  echo "ERROR: --direct-output-files must be 0 or 1"
   exit 2
 fi
 
@@ -184,9 +209,9 @@ if [[ "${NO_SUBMIT}" == "1" ]]; then
 fi
 
 if [[ "${DRY_RUN}" == "1" ]]; then
-  condor_submit JOB_TABLE="${JOB_TABLE}" AK15_MAX_RETRIES="${MAX_RETRIES}" AK15_REQUEST_DISK="${REQUEST_DISK}" AK15_LEADING_ONLY="${AK15_LEADING_ONLY}" -dry-run "condor/.generated/${TAG}/dryrun.ad" condor/submit.sub
+  condor_submit JOB_TABLE="${JOB_TABLE}" AK15_MAX_RETRIES="${MAX_RETRIES}" AK15_REQUEST_DISK="${REQUEST_DISK}" AK15_LEADING_ONLY="${AK15_LEADING_ONLY}" AK15_PREFETCH_XROOTD="${PREFETCH_XROOTD}" AK15_DIRECT_OUTPUT_TARBALL="${DIRECT_OUTPUT_TARBALL}" AK15_DIRECT_OUTPUT_FILES="${DIRECT_OUTPUT_FILES}" -dry-run "condor/.generated/${TAG}/dryrun.ad" condor/submit.sub
   echo "Wrote dry-run ClassAd: condor/.generated/${TAG}/dryrun.ad"
   exit 0
 fi
 
-condor_submit JOB_TABLE="${JOB_TABLE}" AK15_MAX_RETRIES="${MAX_RETRIES}" AK15_REQUEST_DISK="${REQUEST_DISK}" AK15_LEADING_ONLY="${AK15_LEADING_ONLY}" condor/submit.sub
+condor_submit JOB_TABLE="${JOB_TABLE}" AK15_MAX_RETRIES="${MAX_RETRIES}" AK15_REQUEST_DISK="${REQUEST_DISK}" AK15_LEADING_ONLY="${AK15_LEADING_ONLY}" AK15_PREFETCH_XROOTD="${PREFETCH_XROOTD}" AK15_DIRECT_OUTPUT_TARBALL="${DIRECT_OUTPUT_TARBALL}" AK15_DIRECT_OUTPUT_FILES="${DIRECT_OUTPUT_FILES}" condor/submit.sub

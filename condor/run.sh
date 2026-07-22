@@ -95,6 +95,53 @@ stage_x509_proxy() {
 stage_x509_proxy
 : > "${TRANSFER_MARKER}"
 
+reexec_args=("$@")
+if [[ "${AK15_PREFETCH_XROOTD:-0}" == "1" && -z "${STARTED_SINGULARITY:-}" ]]; then
+  prefetch_jobdir="$(pwd -P)"
+  transferred_input_list=""
+  for candidate in "${INPUT_LIST}" "${JOBDIR}/${INPUT_LIST}" "$(basename "${INPUT_LIST}")"; do
+    if [[ -f "${candidate}" ]]; then
+      transferred_input_list="$(readlink -f "${candidate}")"
+      break
+    fi
+  done
+  if [[ -z "${transferred_input_list}" ]]; then
+    echo "ERROR: could not find the transferred input list for xrootd prefetch"
+    exit 4
+  fi
+  command -v xrdcp >/dev/null 2>&1 || {
+    echo "ERROR: xrdcp is unavailable on the worker host"
+    exit 4
+  }
+
+  prefetched_input_list="${prefetch_jobdir}/prefetched_${DATASET_TAG}_${CHUNK_ID}.txt"
+  : > "${prefetched_input_list}"
+  prefetch_index=0
+  while IFS= read -r source_path; do
+    source_path="${source_path#${source_path%%[![:space:]]*}}"
+    source_path="${source_path%${source_path##*[![:space:]]}}"
+    [[ -n "${source_path}" && "${source_path}" != \#* ]] || continue
+    if [[ "${source_path}" == root://* ]]; then
+      local_path="${prefetch_jobdir}/prefetched_$(printf '%04d' "${prefetch_index}").root"
+      echo "Prefetching ${source_path} -> ${local_path}"
+      timeout "${AK15_PREFETCH_TIMEOUT:-1800}" xrdcp -f "${source_path}" "${local_path}"
+      [[ -s "${local_path}" ]] || {
+        echo "ERROR: xrdcp did not produce a nonempty local file"
+        exit 4
+      }
+      printf '%s\n' "${local_path}" >> "${prefetched_input_list}"
+      prefetch_index=$((prefetch_index + 1))
+    else
+      printf '%s\n' "${source_path}" >> "${prefetched_input_list}"
+    fi
+  done < "${transferred_input_list}"
+  [[ -s "${prefetched_input_list}" ]] || {
+    echo "ERROR: xrootd prefetch produced an empty input list"
+    exit 4
+  }
+  reexec_args[2]="${prefetched_input_list}"
+fi
+
 local_output_path() {
   local path="$1"
   if [[ "${path}" == /nfs_scratch/* && ! -d /nfs_scratch && -d /mnt ]]; then
@@ -150,7 +197,7 @@ if [[ "${USE_SINGULARITY:-1}" == "1" && -z "${STARTED_SINGULARITY:-}" ]]; then
       mounts+=(-B /cvmfs/grid.cern.ch/etc/grid-security:/etc/grid-security)
     fi
 
-    exec "${container_runtime}" exec --no-home --pwd "${physical_pwd}" "${mounts[@]}" "${CONTAINER_IMAGE}" /bin/bash "${script_path}" "$@"
+    exec "${container_runtime}" exec --no-home --pwd "${physical_pwd}" "${mounts[@]}" "${CONTAINER_IMAGE}" /bin/bash "${script_path}" "${reexec_args[@]}"
   else
     echo "WARNING: USE_SINGULARITY=1, but no Singularity/Apptainer runtime or container image was found."
     echo "         Continuing on the host OS; CMSSW_10_6_17 still requires an EL7-compatible environment."
@@ -178,6 +225,14 @@ finalize_output_tarball() {
         ls -lh "${copied}" 2>/dev/null || true
       done
       printf 'status=%s\ntag=%s\nchunk=%s\ndirect_outputs=%s\n' "${status}" "${DATASET_TAG}" "${CHUNK_ID}" "${DIRECT_OUTPUTS[*]}" > "${TRANSFER_MARKER}"
+      copy_output "${TRANSFER_MARKER}" "${TRANSFER_MARKER}" || return 9
+      copy_output "${REPORT}" "${REPORT}" || return 9
+      tar -czf "${OUTPUT_TARBALL}" "${TRANSFER_MARKER}"
+      tar_status=$?
+      if [[ "${tar_status}" != "0" ]] || ! tar -tzf "${OUTPUT_TARBALL}" >/dev/null; then
+        echo "ERROR: failed to create direct-output audit tarball ${OUTPUT_TARBALL}"
+        return 9
+      fi
       echo "Prepared direct ROOT outputs: ${DIRECT_OUTPUTS[*]}"
     elif [[ "${AK15_TRANSFER_STAGED_FILES}" == "1" ]]; then
       local missing=0
@@ -338,8 +393,8 @@ copy_output() {
       existing_size="$(xrootd_existing_size "${dest}" || true)"
       if [[ "${existing_size}" =~ ^[0-9]+$ ]]; then
         if [[ "${existing_size}" == "0" ]]; then
-          echo "Removing stale zero-byte xrootd output before retry: ${dest}"
-          xrootd_remove_existing "${dest}" || true
+          echo "ERROR: preserving existing zero-byte xrootd output for inspection: ${dest}"
+          return 9
         else
           echo "Output already exists and is nonempty; keeping existing file: ${dest} (${existing_size} bytes)"
           if [[ "${AK15_DIRECT_OUTPUT_FILES}" == "1" ]]; then
@@ -348,7 +403,7 @@ copy_output() {
           return 0
         fi
       fi
-      if ! xrdcp -f "${src}" "${dest}"; then
+      if ! xrdcp "${src}" "${dest}"; then
         echo "ERROR: xrdcp failed for ${src} -> ${dest}"
         return 9
       fi

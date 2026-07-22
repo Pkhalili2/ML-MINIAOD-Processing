@@ -36,6 +36,21 @@ def close(first, second):
     return abs(first - second) <= max(1e-6, 1e-6 * abs(first), 1e-6 * abs(second))
 
 
+def sampled_entries(total, limit):
+    if limit < 0 or limit >= total:
+        return list(range(total))
+    if limit == 0:
+        return []
+    if limit == 1:
+        return [0]
+    return sorted({int(round(index * (total - 1.0) / (limit - 1))) for index in range(limit)})
+
+
+def compare_values(left, right, message):
+    require(len(left) == len(right), message + " multiplicity changed")
+    require(all(close(float(a), float(b)) for a, b in zip(left, right)), message + " values changed")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Validate a non-destructive full-AK15 to leading-only NanoAOD reduction."
@@ -44,6 +59,12 @@ def main():
     parser.add_argument("reduced")
     parser.add_argument("--reference-leading")
     parser.add_argument("--max-events", type=int, default=-1)
+    parser.add_argument(
+        "--check-events",
+        type=int,
+        default=-1,
+        help="Check this many evenly spaced events while still requiring the full event count.",
+    )
     args = parser.parse_args()
 
     source_file = ROOT.TFile.Open(args.input)
@@ -78,11 +99,30 @@ def main():
     if reference:
         require(reference.GetEntries() >= expected, "reference leading file has too few events")
 
+    ordinary_checks = ("run", "luminosityBlock", "event", "nMuon", "Muon_pt", "MET_pt")
+    collection_prefixes = (
+        "SuperFatJetAK15_",
+        "SuperFatJetAK15PFCand_",
+        "SuperFatJetAK15GenCand_",
+        "SuperFat_SubJetAK8_",
+    )
+    enabled = set(ordinary_checks)
+    for name in source_branches | reduced_branches:
+        if name.startswith(collection_prefixes):
+            enabled.add(name)
+    for tree in (source, reduced, reference):
+        if not tree:
+            continue
+        tree.SetBranchStatus("*", 0)
+        tree_branches = branches(tree)
+        for name in enabled & tree_branches:
+            tree.SetBranchStatus(name, 1)
+
     pf_total = 0
     gen_total = 0
     subjet_total = 0
-    ordinary_checks = ("run", "luminosityBlock", "event", "nMuon", "Muon_pt", "MET_pt")
-    for entry in range(expected):
+    entries = sampled_entries(expected, args.check_events)
+    for entry in entries:
         require(source.GetEntry(entry) > 0, "failed to read input event %d" % entry)
         require(reduced.GetEntry(entry) > 0, "failed to read reduced event %d" % entry)
         if reference:
@@ -113,29 +153,55 @@ def main():
             require(values(reduced, "SuperFatJetAK15_originalAK15Multiplicity")[0] == len(source_pt),
                     "original AK15 multiplicity is incorrect")
 
+            for name in sorted(source_branches & reduced_branches):
+                if not name.startswith("SuperFatJetAK15_"):
+                    continue
+                if name in {
+                    "SuperFatJetAK15_leadingAK15SourceJetIdx",
+                    "SuperFatJetAK15_originalAK15Multiplicity",
+                }:
+                    continue
+                source_values = values(source, name)
+                output_values = values(reduced, name)
+                compare_values([source_values[leading]], output_values,
+                               "%s at event %d" % (name, entry))
+
             source_pf = values(source, "SuperFatJetAK15PFCand_jetIdx")
-            expected_pf = sum(index == leading for index in source_pf)
+            pf_indices = [index for index, jet_index in enumerate(source_pf) if jet_index == leading]
             output_pf = values(reduced, "SuperFatJetAK15PFCand_jetIdx")
-            require(len(output_pf) == expected_pf and all(index == 0 for index in output_pf),
+            require(len(output_pf) == len(pf_indices) and all(index == 0 for index in output_pf),
                     "PF-constituent association is incorrect")
+            for name in sorted(source_branches & reduced_branches):
+                if not name.startswith("SuperFatJetAK15PFCand_") or name.endswith("_jetIdx"):
+                    continue
+                source_values = values(source, name)
+                output_values = values(reduced, name)
+                compare_values([source_values[index] for index in pf_indices], output_values,
+                               "%s at event %d" % (name, entry))
             output_gen = []
             if "SuperFatJetAK15GenCand_jetIdx" in source_branches:
                 source_gen = values(source, "SuperFatJetAK15GenCand_jetIdx")
-                expected_gen = sum(index == leading for index in source_gen)
+                gen_indices = [index for index, jet_index in enumerate(source_gen) if jet_index == leading]
                 output_gen = values(reduced, "SuperFatJetAK15GenCand_jetIdx")
-                require(len(output_gen) == expected_gen and all(index == 0 for index in output_gen),
+                require(len(output_gen) == len(gen_indices) and all(index == 0 for index in output_gen),
                         "generator-constituent association is incorrect")
+                for name in sorted(source_branches & reduced_branches):
+                    if not name.startswith("SuperFatJetAK15GenCand_") or name.endswith("_jetIdx"):
+                        continue
+                    source_values = values(source, name)
+                    output_values = values(reduced, name)
+                    compare_values([source_values[index] for index in gen_indices], output_values,
+                                   "%s at event %d" % (name, entry))
             pf_total += len(output_pf)
             gen_total += len(output_gen)
 
         source_subjet_pt = values(source, "SuperFat_SubJetAK8_pt")
-        reduced_subjet_pt = values(reduced, "SuperFat_SubJetAK8_pt")
-        require(len(source_subjet_pt) == len(reduced_subjet_pt),
-                "legacy subjet-table multiplicity changed")
-        require(all(close(float(a), float(b)) for a, b in zip(
-            source_subjet_pt, reduced_subjet_pt)),
-            "legacy subjet-table values changed")
-        subjet_total += len(reduced_subjet_pt)
+        for name in sorted(source_branches & reduced_branches):
+            if not name.startswith("SuperFat_SubJetAK8_"):
+                continue
+            compare_values(values(source, name), values(reduced, name),
+                           "%s at event %d" % (name, entry))
+        subjet_total += len(source_subjet_pt)
 
         if reference:
             for name in (
@@ -154,6 +220,7 @@ def main():
                         "%s differs from reference" % name)
 
     print("events=%d" % expected)
+    print("checked_events=%d" % len(entries))
     print("ordinary_branches_preserved=1")
     print("leading_ak15_valid=1")
     print("pf_candidates=%d" % pf_total)

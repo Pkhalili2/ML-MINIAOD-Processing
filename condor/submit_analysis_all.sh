@@ -32,6 +32,7 @@ SCRAM_ARCH="slc7_amd64_gcc700"
 INPUT_PREFIX="auto"
 HDFS_XROOTD_PREFIX="${AK15_HDFS_XROOTD_PREFIX:-root://cmsxrootd.hep.wisc.edu//}"
 PREFETCH_XROOTD="0"
+DIRECT_OUTPUT_FILES="0"
 STAGE_INPUT_FILES="auto"
 DRY_RUN="0"
 NO_SUBMIT="0"
@@ -65,6 +66,7 @@ Options:
   --input-prefix auto|file|none|xrootd-wisc
   --hdfs-xrootd-prefix URL  Override the xrootd prefix used for /hdfs/store inputs.
   --prefetch-xrootd         Copy xrootd inputs to worker scratch before CMSSW starts.
+  --direct-output-files 0|1 Copy compact ROOT outputs directly to OUTPUT_DIR.
   --stage-input-files 0|1|auto
                               Transfer local phase-1 ROOT files to the worker.
                               Default: auto for /nfs_scratch inputs.
@@ -104,6 +106,7 @@ while [[ $# -gt 0 ]]; do
     --input-prefix) INPUT_PREFIX="$2"; shift 2 ;;
     --hdfs-xrootd-prefix) HDFS_XROOTD_PREFIX="$2"; shift 2 ;;
     --prefetch-xrootd) PREFETCH_XROOTD="1"; shift ;;
+    --direct-output-files) DIRECT_OUTPUT_FILES="$2"; shift 2 ;;
     --stage-input-files) STAGE_INPUT_FILES="$2"; shift 2 ;;
     --dry-run) DRY_RUN="1"; shift ;;
     --no-submit) NO_SUBMIT="1"; shift ;;
@@ -140,7 +143,15 @@ fi
 
 mkdir -p condor/.logs
 mkdir -p "${RETURN_DIR}"
-mkdir -p "${OUTPUT_DIR}"
+case "${OUTPUT_DIR}" in
+  root://*|davs://*|gsiftp://*) ;;
+  *) mkdir -p "${OUTPUT_DIR}" ;;
+esac
+
+if [[ "${DIRECT_OUTPUT_FILES}" != "0" && "${DIRECT_OUTPUT_FILES}" != "1" ]]; then
+  echo "ERROR: --direct-output-files must be 0 or 1"
+  exit 2
+fi
 
 make_args=(
   --tag "${TAG}"
@@ -251,6 +262,7 @@ submit_args=(
   AK15_MAX_RETRIES="${MAX_RETRIES}"
   AK15_REQUEST_DISK="${REQUEST_DISK}"
   AK15_PREFETCH_XROOTD="${PREFETCH_XROOTD}"
+  AK15_DIRECT_OUTPUT_FILES="${DIRECT_OUTPUT_FILES}"
   ANALYSIS_CONFIG="${CONFIG}"
   SAMPLE_LABEL="${SAMPLE_LABEL}"
   IS_DATA_ANALYSIS="${IS_DATA}"

@@ -241,11 +241,20 @@ Important settings:
 | `--use-x509` | Transfer the current CMS VOMS proxy |
 | `--require-hdfs 0\|1\|auto` | Require a worker with the HDFS mount |
 | `--input-prefix` | Control local, HDFS-xrootd, or unmodified input paths |
+| `--prefetch-xrootd` | Copy xrootd Nano inputs on the worker host before entering EL7 |
+| `--direct-output-files 0\|1` | Copy ROOT outputs to an xrootd output URL and return only an audit tarball |
 | `--request-disk` | Condor scratch request in KB for Stage 1 |
 | `--max-retries` | Automatic retries after nonzero payload exits |
 
 Physics outputs should normally be written to HDFS. Condor logs and compact
 return tarballs can be kept under NFS.
+
+For Stage 2 on existing HDFS Nano files, use `--mode phase2`, one input file
+per job, `--input-prefix xrootd-wisc`, `--prefetch-xrootd`, and
+`--require-hdfs 0`. Only the compact flat ROOT products are returned.
+When the flat products are too large for the Condor return filesystem, set an
+xrootd `--output-dir` and add `--direct-output-files 1`; the ROOT file is then
+written directly to that URL and Condor returns a small audit tarball.
 
 ## Analysis Condor Submission
 

@@ -31,10 +31,33 @@ OUTPUT_TARBALL="analysis_outputs_${DATASET_TAG}_${CHUNK_ID}.tgz"
 BUILD_CPUS="${BUILD_CPUS:-${_CONDOR_NPROCS:-1}}"
 ANALYSIS_RETRIES="${ANALYSIS_RETRIES:-2}"
 STAGED_OUTPUTS=()
+DIRECT_OUTPUTS=()
 FINALIZED_OUTPUT_TARBALL=0
+TRANSFER_MARKER="condor_done_analysis_${DATASET_TAG}_${CHUNK_ID}.txt"
+AK15_DIRECT_OUTPUT_FILES="${AK15_DIRECT_OUTPUT_FILES:-0}"
 
 cd "${JOBDIR}"
 touch "${REPORT}"
+
+stage_x509_proxy() {
+  if [[ -z "${X509_USER_PROXY:-}" ]]; then
+    return 0
+  fi
+  if [[ ! -s "${X509_USER_PROXY}" ]]; then
+    echo "ERROR: X509_USER_PROXY is set but unreadable: ${X509_USER_PROXY}"
+    exit 3
+  fi
+  local physical_jobdir staged_proxy
+  physical_jobdir="$(pwd -P)"
+  staged_proxy="${physical_jobdir}/x509_proxy_analysis_${DATASET_TAG}_${CHUNK_ID}.pem"
+  if [[ "$(readlink -f "${X509_USER_PROXY}")" != "${staged_proxy}" ]]; then
+    cp "${X509_USER_PROXY}" "${staged_proxy}"
+    chmod 600 "${staged_proxy}"
+  fi
+  export X509_USER_PROXY="${staged_proxy}"
+}
+
+stage_x509_proxy
 
 reexec_args=("$@")
 if [[ "${AK15_PREFETCH_XROOTD:-0}" == "1" && -z "${STARTED_SINGULARITY:-}" ]]; then
@@ -95,22 +118,24 @@ if [[ "${USE_SINGULARITY:-1}" == "1" && -z "${STARTED_SINGULARITY:-}" ]]; then
     export STARTED_SINGULARITY=1
     export SINGULARITY_CACHEDIR="${JOBDIR}/singularity"
     export APPTAINER_CACHEDIR="${JOBDIR}/apptainer"
-    script_path="./$(basename "$0")"
-    if [[ ! -x "${script_path}" && -x "./condor/$(basename "$0")" ]]; then
-      script_path="./condor/$(basename "$0")"
+    physical_pwd="$(pwd -P)"
+    export _CONDOR_SCRATCH_DIR="${physical_pwd}"
+    script_path="${physical_pwd}/$(basename "$0")"
+    if [[ ! -x "${script_path}" && -x "${physical_pwd}/condor/$(basename "$0")" ]]; then
+      script_path="${physical_pwd}/condor/$(basename "$0")"
     fi
     if [[ ! -x "${script_path}" ]]; then
       echo "ERROR: could not find executable wrapper inside ${JOBDIR}"
       exit 2
     fi
-    mounts=(-B "$(pwd -P)" -B /cvmfs)
+    mounts=(-B "${physical_pwd}:${physical_pwd}:rw" -B /cvmfs)
     if [[ -n "${_CONDOR_SCRATCH_DIR:-}" && "$(cd "${_CONDOR_SCRATCH_DIR}" && pwd -P)" != "$(pwd -P)" ]]; then
       mounts+=(-B "${_CONDOR_SCRATCH_DIR}")
     fi
     if [[ -d /hdfs ]]; then
       mounts+=(-B /hdfs)
     fi
-    exec "${container_runtime}" exec --no-home "${mounts[@]}" "${CONTAINER_IMAGE}" /bin/bash "${script_path}" "${reexec_args[@]}"
+    exec "${container_runtime}" exec --no-home --pwd "${physical_pwd}" "${mounts[@]}" "${CONTAINER_IMAGE}" /bin/bash "${script_path}" "${reexec_args[@]}"
   fi
 fi
 
@@ -125,7 +150,18 @@ finalize_output_tarball() {
   FINALIZED_OUTPUT_TARBALL=1
   set +e
   cd "${JOBDIR}" 2>/dev/null || return 0
-  if [[ "${#STAGED_OUTPUTS[@]}" -gt 0 ]]; then
+  if [[ "${AK15_DIRECT_OUTPUT_FILES}" == "1" ]]; then
+    printf 'status=%s\ntag=%s\nchunk=%s\ndirect_outputs=%s\n' \
+      "${status}" "${DATASET_TAG}" "${CHUNK_ID}" "${DIRECT_OUTPUTS[*]}" > "${TRANSFER_MARKER}"
+    copy_output "${TRANSFER_MARKER}" "${TRANSFER_MARKER}" || return 9
+    copy_output "${REPORT}" "${REPORT}" || return 9
+    tar -czf "${OUTPUT_TARBALL}" "${TRANSFER_MARKER}"
+    tar_status=$?
+    if [[ "${tar_status}" != "0" ]] || ! tar -tzf "${OUTPUT_TARBALL}" >/dev/null; then
+      echo "ERROR: failed to create direct-output audit tarball ${OUTPUT_TARBALL}"
+      return 9
+    fi
+  elif [[ "${#STAGED_OUTPUTS[@]}" -gt 0 ]]; then
     tar -czf "${OUTPUT_TARBALL}" "${STAGED_OUTPUTS[@]}"
     tar_status=$?
     if [[ "${tar_status}" != "0" ]]; then
@@ -165,10 +201,41 @@ copy_output() {
   local src="$1"
   local dest_name="$2"
   local dest="${OUTPUT_DIR%/}/${dest_name}"
-  if ! mkdir -p "${OUTPUT_DIR}" 2>/dev/null || ! cp -f "${src}" "${dest}" 2>/dev/null; then
-    echo "WARNING: could not copy ${src} directly to ${dest}; relying on Condor output transfer tarball."
-    return 0
-  fi
+  case "${OUTPUT_DIR}" in
+    root://*)
+      if [[ "${AK15_DIRECT_OUTPUT_FILES}" != "1" ]]; then
+        echo "Skipping in-container xrootd output copy; the worker-host bootstrap will upload ${src}."
+        return 0
+      fi
+      local rest host path base existing_size
+      rest="${dest#root://}"
+      host="${rest%%/*}"
+      path="${rest#*/}"
+      base="root://${host}"
+      existing_size="$(xrdfs "${base}" stat "${path}" 2>/dev/null | awk '/Size:/ {print $2; exit}' || true)"
+      if [[ "${existing_size}" =~ ^[0-9]+$ ]]; then
+        if [[ "${existing_size}" == "0" ]]; then
+          echo "ERROR: preserving existing zero-byte xrootd output for inspection: ${dest}"
+          return 9
+        fi
+        echo "Output already exists and is nonempty; keeping existing file: ${dest} (${existing_size} bytes)"
+      elif ! xrdcp "${src}" "${dest}"; then
+        echo "ERROR: xrdcp failed for ${src} -> ${dest}"
+        return 9
+      fi
+      DIRECT_OUTPUTS+=("${dest}")
+      ;;
+    *)
+      if ! mkdir -p "${OUTPUT_DIR}" 2>/dev/null || ! cp -f "${src}" "${dest}" 2>/dev/null; then
+        if [[ "${AK15_DIRECT_OUTPUT_FILES}" == "1" ]]; then
+          echo "ERROR: could not copy ${src} directly to ${dest}."
+          return 9
+        fi
+        echo "WARNING: could not copy ${src} directly to ${dest}; relying on Condor output transfer tarball."
+        return 0
+      fi
+      ;;
+  esac
   echo "Copied ${src} -> ${dest}"
 }
 

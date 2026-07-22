@@ -28,7 +28,7 @@ periodic_release        = (JobStatus == 5) && (NumJobStarts <= $(AK15_MAX_RETRIE
 requirements            = ($(REQUIRE_HDFS) == 0 || (TARGET.HAS_CMS_HDFS =?= True)) && ((TARGET.CMS_CVMFS_Exists =?= True) || (TARGET.HAS_CMS_CVMFS =?= True))
 
 use_x509userproxy       = $(USE_X509)
-environment             = "XrdSecPROTOCOL=gsi"
+environment             = "XrdSecPROTOCOL=gsi AK15_PREFETCH_XROOTD=$(AK15_PREFETCH_XROOTD:0) AK15_DIRECT_OUTPUT_TARBALL=$(AK15_DIRECT_OUTPUT_TARBALL:1) AK15_DIRECT_OUTPUT_FILES=$(AK15_DIRECT_OUTPUT_FILES:0)"
 
 +JobBatchName           = "ak15_$(DATASET_TAG)_$(MODE)"
 +ProjectName            = "UWMadison_HEP"
