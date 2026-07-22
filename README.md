@@ -328,6 +328,18 @@ The plotting script stacks backgrounds, overlays data and signal, draws the MC
 statistical uncertainty, writes cumulative cutflow and normalization CSV
 files, and adds a `Data / sum(MC)` lower panel.
 
+Audit compact analysis outputs before plotting:
+
+```bash
+python scripts/audit_analysis_outputs.py \
+  /path/to/analysis_outputs \
+  --expected-files <count> \
+  --require-lumis \
+  --output-csv analysis_audit.csv
+```
+
+Omit `--require-lumis` for simulated samples.
+
 ## Validation
 
 Before expanding a campaign:
