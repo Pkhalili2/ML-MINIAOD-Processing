@@ -298,6 +298,17 @@ Prepare a metadata table from the example:
 cp config/samples_2018.example.csv config/samples_2018.csv
 ```
 
+The current UL2018 W+jets and ttbar normalization inputs are recorded in
+`config/cross_sections_ul2018.csv`, including the provisional status of the
+HT70-100 value.
+
+Use `stack_group` and `stack_label` to combine separately normalized samples
+into one displayed stack category. Set `cutflow_valid=0` for a sample whose
+kinematic tree is usable but whose stored cutflow does not follow the current
+cumulative convention; it will remain in distribution overlays and be omitted
+from cutflow figures. A campaign-specific example is provided in
+`config/samples_strictleading_2018_20260722.csv`.
+
 Update each input path, cross section, and generator-weight sum, then run:
 
 ```bash

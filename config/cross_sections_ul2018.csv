@@ -1,0 +1,12 @@
+sample,xsec_pb,source,status,note
+WJets_HT70to100,1660.12,BoostedHTT WeightCalculator.h XMass20,provisional,"1372 pb times 1.21; source line is commented and should be confirmed"
+WJets_HT100to200,1627.45,BoostedHTT WeightCalculator.h XMass20,active,"1345 pb times 1.21"
+WJets_HT200to400,435.237,BoostedHTT WeightCalculator.h XMass20,active,"359.7 pb times 1.21"
+WJets_HT400to600,59.1811,BoostedHTT WeightCalculator.h XMass20,active,"48.91 pb times 1.21"
+WJets_HT600to800,14.5805,BoostedHTT WeightCalculator.h XMass20,active,"12.05 pb times 1.21"
+WJets_HT800to1200,6.65621,BoostedHTT WeightCalculator.h XMass20,active,"5.501 pb times 1.21"
+WJets_HT1200to2500,1.60809,BoostedHTT WeightCalculator.h XMass20,active,"1.329 pb times 1.21"
+WJets_HT2500toInf,0.0389136,BoostedHTT WeightCalculator.h XMass20,active,"0.03216 pb times 1.21"
+TTTo2L2Nu,88.29,BoostedHTT WeightCalculator.h XMass20,active,UL2018 channel cross section
+TTToHadronic,377.96,BoostedHTT WeightCalculator.h XMass20,active,UL2018 channel cross section
+TTToSemiLeptonic,365.34,BoostedHTT WeightCalculator.h XMass20,active,UL2018 channel cross section

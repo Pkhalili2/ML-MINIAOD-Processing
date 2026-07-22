@@ -1,7 +1,7 @@
-sample,type,year,dataset,input_dir,xsec_pb,sum_genweights,label,color
-SingleMuon_Run2018A,data,2018,/SingleMuon/Run2018A-15Feb2022_UL2018-v1/MINIAOD,/path/to/analysis_outputs/SingleMuon_Run2018A/*.root,1,1,SingleMuon 2018A,1
-WJetsToLNu_HT100To200,background,2018,/WJetsToLNu_HT-100To200_TuneCP5_13TeV-madgraphMLM-pythia8/RunIISummer20UL18MiniAODv2-106X_upgrade2018_realistic_v16_L1v1-v2/MINIAODSIM,/path/to/analysis_outputs/WJetsToLNu_HT100To200/*.root,,,"W+jets HT100-200",798
-TTToHadronic,background,2018,/TTToHadronic_TuneCP5_13TeV-powheg-pythia8/RunIISummer20UL18MiniAODv2-106X_upgrade2018_realistic_v16_L1v1-v1/MINIAODSIM,/path/to/analysis_outputs/TTToHadronic/*.root,,,TTToHadronic,800
-TTTo2L2Nu,background,2018,/TTTo2L2Nu_TuneCP5_13TeV-powheg-pythia8/RunIISummer20UL18MiniAODv2-106X_upgrade2018_realistic_v16_L1v1-v1/MINIAODSIM,/path/to/analysis_outputs/TTTo2L2Nu/*.root,,,TTTo2L2Nu,416
-TTToSemiLeptonic,background,2018,/TTToSemiLeptonic_TuneCP5_13TeV-powheg-pythia8/RunIISummer20UL18MiniAODv2-106X_upgrade2018_realistic_v16_L1v1-v2/MINIAODSIM,/path/to/analysis_outputs/TTToSemiLeptonic/*.root,,,TTToSemiLeptonic,632
-signal_8b,signal,2018,/hdfs/store/user/abdollah/ExoHiggs/MiniAOD_8bjets_Extra,/path/to/analysis_outputs/signal_8b/*.root,,,8b signal,2
+sample,type,year,dataset,input_dir,xsec_pb,sum_genweights,label,color,cutflow_valid,stack_group,stack_label
+SingleMuon_Run2018A,data,2018,/SingleMuon/Run2018A-15Feb2022_UL2018-v1/MINIAOD,/path/to/analysis_outputs/SingleMuon_Run2018A/*.root,1,1,SingleMuon 2018A,1,1,Data,Data
+WJetsToLNu_HT100To200,background,2018,/WJetsToLNu_HT-100To200_TuneCP5_13TeV-madgraphMLM-pythia8/RunIISummer20UL18MiniAODv2-106X_upgrade2018_realistic_v16_L1v1-v2/MINIAODSIM,/path/to/analysis_outputs/WJetsToLNu_HT100To200/*.root,,,"W+jets HT100-200",798,1,WJets,W+jets
+TTToHadronic,background,2018,/TTToHadronic_TuneCP5_13TeV-powheg-pythia8/RunIISummer20UL18MiniAODv2-106X_upgrade2018_realistic_v16_L1v1-v1/MINIAODSIM,/path/to/analysis_outputs/TTToHadronic/*.root,,,TTToHadronic,800,1,TTToHadronic,ttbar hadronic
+TTTo2L2Nu,background,2018,/TTTo2L2Nu_TuneCP5_13TeV-powheg-pythia8/RunIISummer20UL18MiniAODv2-106X_upgrade2018_realistic_v16_L1v1-v1/MINIAODSIM,/path/to/analysis_outputs/TTTo2L2Nu/*.root,,,TTTo2L2Nu,416,1,TTTo2L2Nu,ttbar dilepton
+TTToSemiLeptonic,background,2018,/TTToSemiLeptonic_TuneCP5_13TeV-powheg-pythia8/RunIISummer20UL18MiniAODv2-106X_upgrade2018_realistic_v16_L1v1-v2/MINIAODSIM,/path/to/analysis_outputs/TTToSemiLeptonic/*.root,,,TTToSemiLeptonic,632,1,TTToSemiLeptonic,ttbar semileptonic
+signal_8b,signal,2018,/hdfs/store/user/abdollah/ExoHiggs/MiniAOD_8bjets_Extra,/path/to/analysis_outputs/signal_8b/*.root,,,8b signal,2,0,signal_8b,8b signal

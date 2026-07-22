@@ -14,69 +14,82 @@ PLOTS = {
     "leading_muon_pt": {
         "branches": ["selectedMuonPt", "selectedLeptonPt"],
         "bins": (40, 0.0, 400.0),
+        "title": "Leading selected muon transverse momentum",
         "x_title": "Selected muon p_{T} [GeV]",
     },
     "muon_ak15_delta_r": {
         "branches": ["muonJetDeltaR"],
         "derived": "delta_r",
         "bins": (36, 0.0, 6.0),
+        "title": "Muon-leading AK15 angular separation",
         "x_title": "#DeltaR(#mu, AK15 jet)",
     },
     "muon_ak15_delta_phi": {
         "branches": ["muonJetDeltaPhi", "selectedLeptonDeltaPhi"],
         "derived": "delta_phi",
         "bins": (32, 0.0, 3.2),
+        "title": "Muon-leading AK15 azimuthal separation",
         "x_title": "|#Delta#phi(#mu, AK15 jet)|",
     },
     "ak15_jet_pt": {
         "branches": ["jet_pt"],
         "bins": (45, 150.0, 1050.0),
+        "title": "Selected leading AK15 jet transverse momentum",
         "x_title": "Selected AK15 jet p_{T} [GeV]",
     },
     "ak15_jet_mass": {
         "branches": ["jet_mass"],
         "bins": (40, 0.0, 400.0),
+        "title": "Selected leading AK15 jet mass",
         "x_title": "Selected AK15 jet mass [GeV]",
     },
     "ak15_jet_eta": {
         "branches": ["jet_eta"],
         "bins": (30, -3.0, 3.0),
+        "title": "Selected leading AK15 jet pseudorapidity",
         "x_title": "Selected AK15 jet #eta",
     },
     "ak15_jet_phi": {
         "branches": ["jet_phi"],
         "bins": (32, -3.2, 3.2),
+        "title": "Selected leading AK15 jet azimuth",
         "x_title": "Selected AK15 jet #phi",
     },
     "selected_muon_eta": {
         "branches": ["selectedMuonEta", "selectedLeptonEta"],
         "bins": (30, -2.5, 2.5),
+        "title": "Selected muon pseudorapidity",
         "x_title": "Selected muon #eta",
     },
     "selected_muon_phi": {
         "branches": ["selectedMuonPhi", "selectedLeptonPhi"],
         "bins": (32, -3.2, 3.2),
+        "title": "Selected muon azimuth",
         "x_title": "Selected muon #phi",
     },
     "selected_muon_iso": {
         "branches": ["selectedMuonIso", "selectedLeptonIso"],
         "bins": (30, 0.0, 0.3),
+        "title": "Selected muon relative isolation",
         "x_title": "Selected muon relative isolation",
     },
     "ak15_mass_over_pt": {
         "branches": [],
         "derived": "mass_over_pt",
         "bins": (35, 0.0, 0.7),
+        "title": "Selected leading AK15 jet mass-to-momentum ratio",
         "x_title": "AK15 jet mass / p_{T}",
     },
     "n_input_muons": {
         "branches": ["nInputMuon"],
         "bins": (8, -0.5, 7.5),
+        "title": "Input muon multiplicity",
         "x_title": "Input muon multiplicity",
     },
     "n_input_ak15": {
         "branches": ["nInputAK15"],
         "bins": (12, -0.5, 11.5),
+        "title": "Input AK15 jet multiplicity",
         "x_title": "Input AK15 jet multiplicity",
     },
 }
@@ -148,6 +161,17 @@ def parse_float(row, key, default=None):
     return float(value.replace(",", ""))
 
 
+def parse_bool(row, key, default=True):
+    value = str(row.get(key, "")).strip().lower()
+    if not value:
+        return default
+    if value in ("1", "true", "yes", "y"):
+        return True
+    if value in ("0", "false", "no", "n"):
+        return False
+    raise ValueError("invalid %s=%s for sample %s" % (key, value, row.get("sample", "")))
+
+
 def expand_files(spec):
     specs = [item.strip() for item in (spec or "").split(";") if item.strip()]
     files = []
@@ -183,6 +207,7 @@ def read_samples(path):
                     % (row["sample"], row.get("input_dir", ""))
                 )
             row["_plot_scale"] = parse_float(row, "plot_scale", 1.0)
+            row["_cutflow_valid"] = parse_bool(row, "cutflow_valid", True)
             rows.append(row)
     return rows
 
@@ -350,7 +375,7 @@ def combined_data_hist(ROOT, plot_name, sample_hists):
     return combined
 
 
-def cms_labels(ROOT, lumi_pb, note):
+def cms_labels(ROOT, lumi_pb, note, title=""):
     labels = []
     cms = ROOT.TLatex()
     cms.SetNDC(True)
@@ -378,13 +403,21 @@ def cms_labels(ROOT, lumi_pb, note):
     lumi.DrawLatex(0.94, 0.92, lumi_text)
     labels.append(lumi)
 
+    if title:
+        plot_title = ROOT.TLatex()
+        plot_title.SetNDC(True)
+        plot_title.SetTextFont(62)
+        plot_title.SetTextSize(0.031)
+        plot_title.DrawLatex(0.14, 0.855, title)
+        labels.append(plot_title)
+
     if note:
         for index, line in enumerate(part.strip() for part in note.split(";") if part.strip()):
             qualifier = ROOT.TLatex()
             qualifier.SetNDC(True)
             qualifier.SetTextFont(42)
-            qualifier.SetTextSize(0.028)
-            qualifier.DrawLatex(0.14, 0.82 - 0.045 * index, line)
+            qualifier.SetTextSize(0.025)
+            qualifier.DrawLatex(0.14, 0.805 - 0.040 * index, line)
             labels.append(qualifier)
     return labels
 
@@ -400,7 +433,26 @@ def build_total_background(backgrounds, name):
     return total
 
 
-def draw_stack_plot(ROOT, key, x_title, data_hist, backgrounds, signals, output_dir, lumi_pb, note, log_y):
+def group_backgrounds(backgrounds, name):
+    grouped = {}
+    order = []
+    for row, hist in backgrounds:
+        group = str(row.get("stack_group", "")).strip() or row["sample"]
+        if group not in grouped:
+            display_row = dict(row)
+            display_row["label"] = str(row.get("stack_label", "")).strip() or row.get("label") or row["sample"]
+            combined = hist.Clone("%s_%s" % (name, safe_name(group)))
+            combined.SetDirectory(0)
+            grouped[group] = (display_row, combined)
+            order.append(group)
+        else:
+            grouped[group][1].Add(hist)
+    return [grouped[group] for group in order]
+
+
+def draw_stack_plot(
+    ROOT, key, plot_title, x_title, data_hist, backgrounds, signals, output_dir, lumi_pb, note, log_y
+):
     suffix = "" if log_y else "_linear"
     is_cutflow = key.startswith("cutflow")
     canvas_height = 920 if is_cutflow else 850
@@ -498,7 +550,7 @@ def draw_stack_plot(ROOT, key, x_title, data_hist, backgrounds, signals, output_
         data_hist.Draw("E1 SAME")
         legend.AddEntry(data_hist, "Data", "lep")
     legend.Draw()
-    labels = cms_labels(ROOT, lumi_pb, note)
+    labels = cms_labels(ROOT, lumi_pb, note, plot_title)
 
     ratio = None
     ratio_band = None
@@ -589,7 +641,25 @@ def draw_efficiency_plot(ROOT, rows, output_dir):
     legend.SetFillStyle(0)
     legend.SetTextSize(0.030)
     drawn = []
-    for index, row in enumerate(rows):
+    grouped_rows = {}
+    group_order = []
+    for row in rows:
+        if not row["_cutflow_valid"]:
+            continue
+        group = str(row.get("stack_group", "")).strip() or row["sample"]
+        if group not in grouped_rows:
+            combined = dict(row)
+            combined["label"] = str(row.get("stack_label", "")).strip() or row.get("label") or row["sample"]
+            combined["_cutflow_raw"] = list(row["_cutflow_raw"])
+            grouped_rows[group] = combined
+            group_order.append(group)
+        else:
+            grouped_rows[group]["_cutflow_raw"] = [
+                left + right for left, right in zip(grouped_rows[group]["_cutflow_raw"], row["_cutflow_raw"])
+            ]
+
+    for index, group in enumerate(group_order):
+        row = grouped_rows[group]
         values = row["_cutflow_raw"]
         baseline_index = 1 if row["type"] == "data" else 0
         baseline = values[baseline_index]
@@ -608,7 +678,12 @@ def draw_efficiency_plot(ROOT, rows, output_dir):
         legend.AddEntry(hist, row.get("label") or row["sample"], "lp")
         drawn.append(hist)
     legend.Draw()
-    labels = cms_labels(ROOT, None, "Selection efficiency (normalization independent)")
+    labels = cms_labels(
+        ROOT,
+        None,
+        "Normalization independent",
+        "Cumulative selection efficiency",
+    )
     canvas.SaveAs(os.path.join(output_dir, "cutflow_efficiency.png"))
     canvas.SaveAs(os.path.join(output_dir, "cutflow_efficiency.pdf"))
 
@@ -728,6 +803,7 @@ def main():
                 "cutflow_weight_method": cutflow_method,
                 "xsec_source": row.get("xsec_source", ""),
                 "normalization_note": row.get("normalization_note", ""),
+                "cutflow_valid": int(row["_cutflow_valid"]),
             }
         )
         for stage_index, stage in enumerate(CUTFLOW_STAGES):
@@ -739,6 +815,7 @@ def main():
                     "raw_events": "%.17g" % metadata["raw"][stage_index],
                     "sum_genweights": "%.17g" % cutflow_genweights[stage_index],
                     "normalized_yield": "%.17g" % row["_cutflow_yields"][stage_index],
+                    "cutflow_valid": int(row["_cutflow_valid"]),
                 }
             )
         for plot in plots:
@@ -779,12 +856,21 @@ def main():
             "cutflow_weight_method",
             "xsec_source",
             "normalization_note",
+            "cutflow_valid",
         ]
         writer = csv.DictWriter(handle, fieldnames=fields)
         writer.writeheader()
         writer.writerows(normalization_rows)
     with open(os.path.join(args.output_dir, "cutflow.csv"), "w") as handle:
-        fields = ["sample", "type", "stage", "raw_events", "sum_genweights", "normalized_yield"]
+        fields = [
+            "sample",
+            "type",
+            "stage",
+            "raw_events",
+            "sum_genweights",
+            "normalized_yield",
+            "cutflow_valid",
+        ]
         writer = csv.DictWriter(handle, fieldnames=fields)
         writer.writeheader()
         writer.writerows(cutflow_rows)
@@ -792,11 +878,15 @@ def main():
     for plot in plots:
         sample_hists = plot_hists[plot]
         data_hist = combined_data_hist(ROOT, plot, sample_hists)
-        backgrounds = [(row, hist) for row, hist in sample_hists if row["type"] == "background"]
+        backgrounds = group_backgrounds(
+            [(row, hist) for row, hist in sample_hists if row["type"] == "background"],
+            "grouped_%s" % safe_name(plot),
+        )
         signals = [(row, hist) for row, hist in sample_hists if row["type"] == "signal"]
         draw_stack_plot(
             ROOT,
             plot,
+            PLOTS[plot]["title"],
             PLOTS[plot]["x_title"],
             data_hist,
             backgrounds,
@@ -809,6 +899,7 @@ def main():
         draw_stack_plot(
             ROOT,
             plot,
+            PLOTS[plot]["title"],
             PLOTS[plot]["x_title"],
             data_hist,
             backgrounds,
@@ -821,16 +912,22 @@ def main():
 
     cutflow_hists = []
     for row in samples:
+        if not row["_cutflow_valid"]:
+            continue
         hist = cutflow_hist(ROOT, "cutflow_" + safe_name(row["sample"]), row["_cutflow_yields"])
         style_hist(ROOT, row, hist, row["_color"])
         cutflow_hists.append((row, hist))
     data_cutflow = combined_data_hist(ROOT, "cutflow_weighted", cutflow_hists)
-    background_cutflow = [(row, hist) for row, hist in cutflow_hists if row["type"] == "background"]
+    background_cutflow = group_backgrounds(
+        [(row, hist) for row, hist in cutflow_hists if row["type"] == "background"],
+        "grouped_cutflow",
+    )
     signal_cutflow = [(row, hist) for row, hist in cutflow_hists if row["type"] == "signal"]
     for log_y in (True, False):
         draw_stack_plot(
             ROOT,
             "cutflow_weighted",
+            "Cumulative weighted event selection",
             "Selection stage",
             data_cutflow,
             background_cutflow,
