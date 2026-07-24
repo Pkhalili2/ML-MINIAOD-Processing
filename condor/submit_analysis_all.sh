@@ -307,12 +307,18 @@ if [[ "${DIRECT_OUTPUT_FILES}" == "1" ]]; then
   submit_args+=(
     AK15_TRANSFER_OUTPUT_FILES=""
     AK15_TRANSFER_OUTPUT_REMAPS=""
+    AK15_STDOUT="/dev/null"
+    AK15_STDERR="/dev/null"
+    AK15_EVENT_LOG="/dev/null"
   )
 else
   transfer_name='analysis_outputs_$(DATASET_TAG)_$(CHUNK_ID).tgz'
   submit_args+=(
     AK15_TRANSFER_OUTPUT_FILES="${transfer_name}"
     AK15_TRANSFER_OUTPUT_REMAPS="${transfer_name} = \$(RETURN_DIR)/${transfer_name}"
+    AK15_STDOUT="${LOG_DIR}/analysis_\$(DATASET_TAG)_\$(CHUNK_ID).out"
+    AK15_STDERR="${LOG_DIR}/analysis_\$(DATASET_TAG)_\$(CHUNK_ID).err"
+    AK15_EVENT_LOG="${LOG_DIR}/analysis_\$(DATASET_TAG)_\$(CHUNK_ID).log"
   )
 fi
 

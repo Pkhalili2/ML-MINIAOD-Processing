@@ -10,9 +10,9 @@ transfer_input_files    = condor/package.tgz,condor_analysis_bootstrap.sh,$(INPU
 transfer_output_files   = "$(AK15_TRANSFER_OUTPUT_FILES)"
 transfer_output_remaps  = "$(AK15_TRANSFER_OUTPUT_REMAPS)"
 
-output                  = $(AK15_LOG_DIR)/analysis_$(DATASET_TAG)_$(CHUNK_ID).out
-error                   = $(AK15_LOG_DIR)/analysis_$(DATASET_TAG)_$(CHUNK_ID).err
-log                     = $(AK15_LOG_DIR)/analysis_$(DATASET_TAG)_$(CHUNK_ID).log
+output                  = $(AK15_STDOUT)
+error                   = $(AK15_STDERR)
+log                     = $(AK15_EVENT_LOG)
 
 request_cpus            = 1
 request_memory          = 4 GB

@@ -8,14 +8,36 @@ import os
 import sys
 
 
+def is_remote(path):
+    return path.startswith(("root://", "davs://", "https://"))
+
+
+def read_manifest(path):
+    entries = []
+    with open(path) as handle:
+        for raw in handle:
+            entry = raw.strip()
+            if entry and not entry.startswith("#"):
+                entries.append(entry)
+    return entries
+
+
 def expand_inputs(items):
     files = []
     for item in items:
-        if os.path.isdir(item):
+        if is_remote(item):
+            matches = [item]
+        elif os.path.isfile(item) and item.endswith((".txt", ".list")):
+            matches = read_manifest(item)
+        elif os.path.isdir(item):
             matches = glob.glob(os.path.join(item, "*.root"))
         else:
             matches = glob.glob(item)
-        files.extend(path for path in matches if os.path.isfile(path) and os.path.getsize(path) > 0)
+        files.extend(
+            path
+            for path in matches
+            if is_remote(path) or (os.path.isfile(path) and os.path.getsize(path) > 0)
+        )
     return sorted(set(files))
 
 

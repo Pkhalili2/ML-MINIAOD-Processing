@@ -190,13 +190,27 @@ def expand_files(spec):
     specs = [item.strip() for item in (spec or "").split(";") if item.strip()]
     files = []
     for item in specs:
-        if os.path.isdir(item):
+        if item.startswith(("root://", "davs://", "https://")):
+            matches = [item]
+        elif os.path.isfile(item) and item.endswith((".txt", ".list")):
+            with open(item) as handle:
+                matches = [
+                    raw.strip()
+                    for raw in handle
+                    if raw.strip() and not raw.lstrip().startswith("#")
+                ]
+        elif os.path.isdir(item):
             matches = sorted(glob.glob(os.path.join(item, "*.root")))
         else:
             matches = sorted(glob.glob(item))
             if not matches and os.path.isfile(item):
                 matches = [item]
-        files.extend(path for path in matches if os.path.isfile(path) and os.path.getsize(path) > 0)
+        files.extend(
+            path
+            for path in matches
+            if path.startswith(("root://", "davs://", "https://"))
+            or (os.path.isfile(path) and os.path.getsize(path) > 0)
+        )
     return sorted(set(files))
 
 
