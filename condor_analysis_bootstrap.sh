@@ -14,6 +14,7 @@ analysis_file="analysis_${dataset_tag}_${chunk_id}.root"
 report="job_report_analysis_${dataset_tag}_${chunk_id}.txt"
 marker="condor_done_analysis_${dataset_tag}_${chunk_id}.txt"
 output_tarball="analysis_outputs_${dataset_tag}_${chunk_id}.tgz"
+analysis_dest="${output_dir%/}/${analysis_file}"
 
 write_audit_tarball() {
   local files=()
@@ -28,11 +29,6 @@ write_audit_tarball() {
 }
 
 trap 'final_status=$?; write_audit_tarball; exit "${final_status}"' EXIT
-
-set +e
-AK15_DIRECT_OUTPUT_FILES=0 bash condor/run_analysis.sh "$@"
-status=$?
-set -e
 
 copy_xrootd_if_absent() {
   local src="$1"
@@ -60,12 +56,33 @@ if [[ "${output_dir}" != root://* ]]; then
 fi
 
 direct_outputs=()
+existing_analysis_size="$(
+  rest="${analysis_dest#root://}"
+  host="${rest%%/*}"
+  path="${rest#*/}"
+  xrdfs "root://${host}" stat "${path}" 2>/dev/null |
+    awk '/Size:/ {print $2; exit}' || true
+)"
+payload_skipped=0
+if [[ "${existing_analysis_size}" =~ ^[1-9][0-9]*$ ]]; then
+  echo "Direct analysis output already exists; skipping payload: ${analysis_dest} (${existing_analysis_size} bytes)"
+  status=0
+  payload_skipped=1
+else
+  set +e
+  AK15_DIRECT_OUTPUT_FILES=0 bash condor/run_analysis.sh "$@"
+  status=$?
+  set -e
+fi
+
 if [[ "${status}" == "0" ]]; then
-  if [[ ! -s "${analysis_file}" ]]; then
+  if [[ "${payload_skipped}" == "1" ]]; then
+    direct_outputs+=("${analysis_dest}")
+  elif [[ ! -s "${analysis_file}" ]]; then
     echo "ERROR: successful analysis did not leave ${analysis_file} in worker scratch"
     status=8
-  elif copy_xrootd_if_absent "${analysis_file}" "${output_dir%/}/${analysis_file}"; then
-    direct_outputs+=("${output_dir%/}/${analysis_file}")
+  elif copy_xrootd_if_absent "${analysis_file}" "${analysis_dest}"; then
+    direct_outputs+=("${analysis_dest}")
   else
     status=9
   fi
