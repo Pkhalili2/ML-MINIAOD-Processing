@@ -11,6 +11,12 @@ import sys
 
 
 PLOTS = {
+    "event_ht": {
+        "branches": ["eventHT"],
+        "bins": (50, 0.0, 2500.0),
+        "title": "Reconstructed event H_{T}",
+        "x_title": "AK4-jet H_{T} [GeV]",
+    },
     "leading_muon_pt": {
         "branches": ["selectedMuonPt", "selectedLeptonPt"],
         "bins": (40, 0.0, 400.0),
@@ -92,9 +98,16 @@ PLOTS = {
         "title": "Input AK15 jet multiplicity",
         "x_title": "Input AK15 jet multiplicity",
     },
+    "n_ht_jets": {
+        "branches": ["nHTJet"],
+        "bins": (16, -0.5, 15.5),
+        "title": "AK4 jet multiplicity entering H_{T}",
+        "x_title": "Number of AK4 jets in H_{T}",
+    },
 }
 
 DEFAULT_PLOTS = [
+    "event_ht",
     "leading_muon_pt",
     "muon_ak15_delta_r",
     "muon_ak15_delta_phi",
@@ -108,6 +121,7 @@ DEFAULT_PLOTS = [
     "ak15_mass_over_pt",
     "n_input_muons",
     "n_input_ak15",
+    "n_ht_jets",
 ]
 
 CUTFLOW_STAGES = [

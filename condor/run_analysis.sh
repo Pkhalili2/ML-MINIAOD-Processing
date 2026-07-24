@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -lt 17 ]]; then
-  echo "Usage: run_analysis.sh DATASET_TAG CHUNK_ID INPUT_LIST OUTPUT_DIR MAX_EVENTS CMSSW_VERSION SCRAM_ARCH ANALYSIS_CONFIG SAMPLE_LABEL IS_DATA JET_PT_MIN JET_ETA_MAX LEPTON_MODE MUON_PT_MIN MUON_ETA_MAX MUON_ISO_MAX MIN_DPHI [MUON_ISO_BRANCH=auto]"
+  echo "Usage: run_analysis.sh DATASET_TAG CHUNK_ID INPUT_LIST OUTPUT_DIR MAX_EVENTS CMSSW_VERSION SCRAM_ARCH ANALYSIS_CONFIG SAMPLE_LABEL IS_DATA JET_PT_MIN JET_ETA_MAX LEPTON_MODE MUON_PT_MIN MUON_ETA_MAX MUON_ISO_MAX MIN_DPHI [MUON_ISO_BRANCH=auto] [MUON_ID=none] [HT_JET_PT_MIN=30] [HT_JET_ETA_MAX=2.4] [HT_JET_ID_MIN=2]"
   exit 2
 fi
 
@@ -24,6 +24,10 @@ MUON_ETA_MAX="${15}"
 MUON_ISO_MAX="${16}"
 MIN_DPHI="${17}"
 MUON_ISO_BRANCH="${18:-auto}"
+MUON_ID="${19:-none}"
+HT_JET_PT_MIN="${20:-30}"
+HT_JET_ETA_MAX="${21:-2.4}"
+HT_JET_ID_MIN="${22:-2}"
 
 JOBDIR="${_CONDOR_SCRATCH_DIR:-$(pwd)}"
 REPORT="job_report_analysis_${DATASET_TAG}_${CHUNK_ID}.txt"
@@ -121,10 +125,10 @@ if [[ "${USE_SINGULARITY:-1}" == "1" && -z "${STARTED_SINGULARITY:-}" ]]; then
     physical_pwd="$(pwd -P)"
     export _CONDOR_SCRATCH_DIR="${physical_pwd}"
     script_path="${physical_pwd}/$(basename "$0")"
-    if [[ ! -x "${script_path}" && -x "${physical_pwd}/condor/$(basename "$0")" ]]; then
+    if [[ ! -f "${script_path}" && -f "${physical_pwd}/condor/$(basename "$0")" ]]; then
       script_path="${physical_pwd}/condor/$(basename "$0")"
     fi
-    if [[ ! -x "${script_path}" ]]; then
+    if [[ ! -f "${script_path}" ]]; then
       echo "ERROR: could not find executable wrapper inside ${JOBDIR}"
       exit 2
     fi
@@ -397,6 +401,10 @@ run_with_retries "physics analysis tree" \
     --muon-eta-max "${MUON_ETA_MAX}" \
     --muon-iso-max "${MUON_ISO_MAX}" \
     --muon-iso-branch "${MUON_ISO_BRANCH}" \
+    --muon-id "${MUON_ID}" \
+    --ht-jet-pt-min "${HT_JET_PT_MIN}" \
+    --ht-jet-eta-max "${HT_JET_ETA_MAX}" \
+    --ht-jet-id-min "${HT_JET_ID_MIN}" \
     --min-dphi "${MIN_DPHI}"
 
 if [[ ! -s "${analysis_file}" ]]; then

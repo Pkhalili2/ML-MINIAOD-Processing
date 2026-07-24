@@ -13,6 +13,21 @@ output_dir="$4"
 analysis_file="analysis_${dataset_tag}_${chunk_id}.root"
 report="job_report_analysis_${dataset_tag}_${chunk_id}.txt"
 marker="condor_done_analysis_${dataset_tag}_${chunk_id}.txt"
+output_tarball="analysis_outputs_${dataset_tag}_${chunk_id}.tgz"
+
+write_audit_tarball() {
+  local files=()
+  set +e
+  [[ -s "${marker}" ]] && files+=("${marker}")
+  [[ -s "${report}" ]] && files+=("${report}")
+  if [[ "${#files[@]}" -gt 0 ]]; then
+    tar -czf "${output_tarball}" "${files[@]}"
+  else
+    tar -czf "${output_tarball}" --files-from /dev/null
+  fi
+}
+
+trap 'final_status=$?; write_audit_tarball; exit "${final_status}"' EXIT
 
 set +e
 AK15_DIRECT_OUTPUT_FILES=0 bash condor/run_analysis.sh "$@"

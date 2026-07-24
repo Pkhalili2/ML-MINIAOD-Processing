@@ -279,6 +279,38 @@ bash condor/submit_analysis_all.sh \
 Use one source file per job when prefetching multi-GB Nano files so the worker
 scratch request remains predictable.
 
+For the tighter muon control-region selection and reconstructed event HT:
+
+```bash
+bash condor/submit_analysis_all.sh \
+  --tag wjets_ht_analysis_tightid \
+  --input '/hdfs/store/user/'"$USER"'/AK15/WJets_HT*/nano_*.root' \
+  --output-dir root://cmsxrootd.hep.wisc.edu//store/user/$USER/AK15/analysis_tightid \
+  --log-dir /hdfs/store/user/$USER/AK15/analysis_tightid/logs \
+  --config config/analysis_muon_2018_tightid_ht.json \
+  --files-per-job 1 \
+  --is-data 0 \
+  --muon-pt-min 55 \
+  --muon-iso-max 0.15 \
+  --muon-iso-branch Muon_pfRelIso04_all \
+  --muon-id tight \
+  --ht-jet-pt-min 30 \
+  --ht-jet-eta-max 2.4 \
+  --ht-jet-id-min 2 \
+  --input-prefix xrootd-wisc \
+  --prefetch-xrootd \
+  --direct-output-files 1 \
+  --use-x509 \
+  --require-hdfs 0
+```
+
+The compact output stores `eventHT` as the scalar pT sum of ordinary AK4 jets
+passing the configured pT, eta, and `Jet_jetId` requirements. It also stores
+the selected muon's medium/tight ID decisions and an `AnalysisMetadata` tree
+containing the exact selection configuration. The data and MC definitions of
+`eventHT` are identical; generator HT is used only to label and normalize the
+W+jets source samples.
+
 ## Luminosity and Weighted Plots
 
 Collect unique data run/luminosity sections:

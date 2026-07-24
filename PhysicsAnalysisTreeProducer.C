@@ -147,6 +147,17 @@ double readMuonIso(const std::string& requested,
   return std::numeric_limits<double>::infinity();
 }
 
+bool passesMuonId(const std::string& requested,
+                  const std::unique_ptr<TTreeReaderArray<Bool_t>>& mediumId,
+                  const std::unique_ptr<TTreeReaderArray<Bool_t>>& tightId,
+                  unsigned int idx) {
+  const std::string mode = lower(trim(requested));
+  if (mode.empty() || mode == "none") return true;
+  if (mode == "medium") return mediumId && (*mediumId)[idx];
+  if (mode == "tight") return tightId && (*tightId)[idx];
+  return false;
+}
+
 using LumiMask = std::map<UInt_t, std::vector<std::pair<UInt_t, UInt_t>>>;
 
 LumiMask loadLumiMask(const char* pathArg) {
@@ -227,11 +238,21 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
                                 double muonIsoMax = 0.3,
                                 double minDeltaPhi = 1.5,
                                 const char* muonIsoBranchArg = "auto",
-                                const char* lumiMaskRangesArg = "") {
+                                const char* lumiMaskRangesArg = "",
+                                const char* muonIdArg = "none",
+                                double htJetPtMin = 30.0,
+                                double htJetEtaMax = 2.4,
+                                int htJetIdMin = 2) {
   const std::string leptonMode = lower(trim(leptonModeArg ? leptonModeArg : "muon"));
   if (leptonMode != "muon") {
     std::cerr << "ERROR: PhysicsAnalysisTreeProducer currently supports only lepton_mode=muon; got '"
               << leptonMode << "'" << std::endl;
+    return 2;
+  }
+  const std::string muonIdMode = lower(trim(muonIdArg ? muonIdArg : "none"));
+  if (muonIdMode != "none" && muonIdMode != "medium" && muonIdMode != "tight") {
+    std::cerr << "ERROR: muon_id must be none, medium, or tight; got '"
+              << muonIdMode << "'" << std::endl;
     return 2;
   }
 
@@ -251,6 +272,10 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
       "Muon_pt",
       "Muon_eta",
       "Muon_phi",
+      "nJet",
+      "Jet_pt",
+      "Jet_eta",
+      "Jet_jetId",
       "nSuperFatJetAK15",
       "SuperFatJetAK15_pt",
       "SuperFatJetAK15_eta",
@@ -280,12 +305,27 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
   auto muonIso03All = optionalArray<Float_t>(reader, tree, "Muon_pfRelIso03_all");
   auto muonIso04Chg = optionalArray<Float_t>(reader, tree, "Muon_pfRelIso04_chg");
   auto muonIso03Chg = optionalArray<Float_t>(reader, tree, "Muon_pfRelIso03_chg");
+  auto muonMediumId = optionalArray<Bool_t>(reader, tree, "Muon_mediumId");
+  auto muonTightId = optionalArray<Bool_t>(reader, tree, "Muon_tightId");
+  if (muonIdMode == "medium" && !muonMediumId) {
+    std::cerr << "ERROR: medium muon ID requested but Muon_mediumId is missing" << std::endl;
+    return 4;
+  }
+  if (muonIdMode == "tight" && !muonTightId) {
+    std::cerr << "ERROR: tight muon ID requested but Muon_tightId is missing" << std::endl;
+    return 4;
+  }
 
-  TTreeReaderValue<UInt_t> nJet(reader, "nSuperFatJetAK15");
-  TTreeReaderArray<Float_t> jetPt(reader, "SuperFatJetAK15_pt");
-  TTreeReaderArray<Float_t> jetEta(reader, "SuperFatJetAK15_eta");
-  TTreeReaderArray<Float_t> jetPhi(reader, "SuperFatJetAK15_phi");
-  TTreeReaderArray<Float_t> jetMass(reader, "SuperFatJetAK15_mass");
+  TTreeReaderValue<UInt_t> nRecoJet(reader, "nJet");
+  TTreeReaderArray<Float_t> recoJetPt(reader, "Jet_pt");
+  TTreeReaderArray<Float_t> recoJetEta(reader, "Jet_eta");
+  TTreeReaderArray<Int_t> recoJetId(reader, "Jet_jetId");
+
+  TTreeReaderValue<UInt_t> nAK15(reader, "nSuperFatJetAK15");
+  TTreeReaderArray<Float_t> ak15Pt(reader, "SuperFatJetAK15_pt");
+  TTreeReaderArray<Float_t> ak15Eta(reader, "SuperFatJetAK15_eta");
+  TTreeReaderArray<Float_t> ak15Phi(reader, "SuperFatJetAK15_phi");
+  TTreeReaderArray<Float_t> ak15Mass(reader, "SuperFatJetAK15_mass");
   auto jetSourceIdx =
       optionalArray<Int_t>(reader, tree, "SuperFatJetAK15_leadingAK15SourceJetIdx");
   auto jetOriginalMultiplicity =
@@ -326,6 +366,32 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
   normalization.GetXaxis()->SetBinLabel(4, "selected_events");
   normalization.GetXaxis()->SetBinLabel(5, "selected_sum_genweights");
 
+  TTree analysisMetadata("AnalysisMetadata", "Muon-channel selection configuration");
+  Double_t metadataJetPtMin = jetPtMin;
+  Double_t metadataJetEtaMax = jetEtaMax;
+  Double_t metadataMuonPtMin = muonPtMin;
+  Double_t metadataMuonEtaMax = muonEtaMax;
+  Double_t metadataMuonIsoMax = muonIsoMax;
+  Double_t metadataMinDeltaPhi = minDeltaPhi;
+  Double_t metadataHtJetPtMin = htJetPtMin;
+  Double_t metadataHtJetEtaMax = htJetEtaMax;
+  Int_t metadataHtJetIdMin = htJetIdMin;
+  std::string metadataMuonId = muonIdMode;
+  std::string metadataMuonIsoBranch =
+      lower(trim(muonIsoBranchArg ? muonIsoBranchArg : "auto"));
+  analysisMetadata.Branch("jetPtMin", &metadataJetPtMin);
+  analysisMetadata.Branch("jetEtaMax", &metadataJetEtaMax);
+  analysisMetadata.Branch("muonPtMin", &metadataMuonPtMin);
+  analysisMetadata.Branch("muonEtaMax", &metadataMuonEtaMax);
+  analysisMetadata.Branch("muonIsoMax", &metadataMuonIsoMax);
+  analysisMetadata.Branch("minDeltaPhi", &metadataMinDeltaPhi);
+  analysisMetadata.Branch("htJetPtMin", &metadataHtJetPtMin);
+  analysisMetadata.Branch("htJetEtaMax", &metadataHtJetEtaMax);
+  analysisMetadata.Branch("htJetIdMin", &metadataHtJetIdMin);
+  analysisMetadata.Branch("muonId", &metadataMuonId);
+  analysisMetadata.Branch("muonIsoBranch", &metadataMuonIsoBranch);
+  analysisMetadata.Fill();
+
   TTree luminosityBlocks("LuminosityBlocks", "Certified luminosity blocks seen in data input");
   UInt_t lumiRun = 0;
   UInt_t lumiBlock = 0;
@@ -340,10 +406,14 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
   Int_t outIsData = isData ? 1 : 0;
   Int_t selectedLeptonPdgId = 13;
   Int_t selectedMuonIdx = -1;
+  Int_t selectedMuonMediumId = -1;
+  Int_t selectedMuonTightId = -1;
   Int_t selectedJetIdx = -1;
   Int_t selectedSourceJetIdx = -1;
   Int_t nInputMuon = 0;
   Int_t nInputAK15 = 0;
+  Int_t nHTJet = 0;
+  Float_t eventHT = 0.0;
   Float_t selectedMuonPt = kMissing;
   Float_t selectedMuonEta = kMissing;
   Float_t selectedMuonPhi = kMissing;
@@ -376,12 +446,16 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
   out.Branch("selectedLeptonPhi", &selectedLeptonPhi);
   out.Branch("selectedLeptonIso", &selectedLeptonIso);
   out.Branch("selectedMuonIdx", &selectedMuonIdx);
+  out.Branch("selectedMuonMediumId", &selectedMuonMediumId);
+  out.Branch("selectedMuonTightId", &selectedMuonTightId);
   out.Branch("selectedMuonPt", &selectedMuonPt);
   out.Branch("selectedMuonEta", &selectedMuonEta);
   out.Branch("selectedMuonPhi", &selectedMuonPhi);
   out.Branch("selectedMuonIso", &selectedMuonIso);
   out.Branch("selectedJetIdx", &selectedJetIdx);
   out.Branch("selectedSourceJetIdx", &selectedSourceJetIdx);
+  out.Branch("nHTJet", &nHTJet);
+  out.Branch("eventHT", &eventHT);
   out.Branch("jet_pt", &jet_pt);
   out.Branch("jet_eta", &jet_eta);
   out.Branch("jet_phi", &jet_phi);
@@ -420,9 +494,9 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
     }
 
     nInputMuon = static_cast<Int_t>(*nMuon);
-    nInputAK15 = (jetOriginalMultiplicity && *nJet > 0)
+    nInputAK15 = (jetOriginalMultiplicity && *nAK15 > 0)
                      ? (*jetOriginalMultiplicity)[0]
-                     : static_cast<Int_t>(*nJet);
+                     : static_cast<Int_t>(*nAK15);
     if (*nMuon > 0) {
       cutflow.Fill(3);
       cutflowWeighted.Fill(3, eventWeight);
@@ -440,6 +514,7 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
       if (muonPt[i] <= muonPtMin) continue;
       if (std::abs(muonEta[i]) >= muonEtaMax) continue;
       if (iso >= muonIsoMax) continue;
+      if (!passesMuonId(muonIdMode, muonMediumId, muonTightId, i)) continue;
       if (muonPt[i] > bestMuonPt) {
         bestMuonPt = muonPt[i];
         bestMuonIdx = static_cast<int>(i);
@@ -453,28 +528,28 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
     cutflow.Fill(4);
     cutflowWeighted.Fill(4, eventWeight);
 
-    if (*nJet == 0) {
+    if (*nAK15 == 0) {
       continue;
     }
     cutflow.Fill(5);
     cutflowWeighted.Fill(5, eventWeight);
 
     int bestJetIdx = -1;
-    for (UInt_t j = 0; j < *nJet; ++j) {
-      if (bestJetIdx < 0 || jetPt[j] > jetPt[bestJetIdx]) {
+    for (UInt_t j = 0; j < *nAK15; ++j) {
+      if (bestJetIdx < 0 || ak15Pt[j] > ak15Pt[bestJetIdx]) {
         bestJetIdx = static_cast<int>(j);
       }
     }
     if (bestJetIdx < 0 ||
-        jetPt[bestJetIdx] <= jetPtMin ||
-        std::abs(jetEta[bestJetIdx]) >= jetEtaMax) {
+        ak15Pt[bestJetIdx] <= jetPtMin ||
+        std::abs(ak15Eta[bestJetIdx]) >= jetEtaMax) {
       continue;
     }
     cutflow.Fill(6);
     cutflowWeighted.Fill(6, eventWeight);
 
     const double bestSignedDeltaPhi =
-        deltaPhiSigned(jetPhi[bestJetIdx], muonPhi[bestMuonIdx]);
+        deltaPhiSigned(ak15Phi[bestJetIdx], muonPhi[bestMuonIdx]);
     if (std::abs(bestSignedDeltaPhi) <= minDeltaPhi) {
       continue;
     }
@@ -488,6 +563,8 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
     outIsData = isData ? 1 : 0;
     selectedLeptonPdgId = 13;
     selectedMuonIdx = bestMuonIdx;
+    selectedMuonMediumId = muonMediumId ? ((*muonMediumId)[bestMuonIdx] ? 1 : 0) : -1;
+    selectedMuonTightId = muonTightId ? ((*muonTightId)[bestMuonIdx] ? 1 : 0) : -1;
     selectedJetIdx = bestJetIdx;
     selectedSourceJetIdx = jetSourceIdx ? (*jetSourceIdx)[bestJetIdx] : bestJetIdx;
     selectedMuonPt = muonPt[bestMuonIdx];
@@ -498,10 +575,19 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
     selectedLeptonEta = selectedMuonEta;
     selectedLeptonPhi = selectedMuonPhi;
     selectedLeptonIso = selectedMuonIso;
-    jet_pt = jetPt[bestJetIdx];
-    jet_eta = jetEta[bestJetIdx];
-    jet_phi = jetPhi[bestJetIdx];
-    jet_mass = jetMass[bestJetIdx];
+    nHTJet = 0;
+    eventHT = 0.0;
+    for (UInt_t j = 0; j < *nRecoJet; ++j) {
+      if (recoJetPt[j] <= htJetPtMin) continue;
+      if (std::abs(recoJetEta[j]) >= htJetEtaMax) continue;
+      if (recoJetId[j] < htJetIdMin) continue;
+      eventHT += recoJetPt[j];
+      ++nHTJet;
+    }
+    jet_pt = ak15Pt[bestJetIdx];
+    jet_eta = ak15Eta[bestJetIdx];
+    jet_phi = ak15Phi[bestJetIdx];
+    jet_mass = ak15Mass[bestJetIdx];
     muonJetSignedDeltaPhi = bestSignedDeltaPhi;
     muonJetDeltaPhi = std::abs(bestSignedDeltaPhi);
     muonJetDeltaR = deltaR(selectedMuonEta, selectedMuonPhi, jet_eta, jet_phi);
@@ -532,6 +618,7 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
   cutflow.Write();
   cutflowWeighted.Write();
   normalization.Write();
+  analysisMetadata.Write();
   luminosityBlocks.Write();
   output.Close();
 
@@ -542,6 +629,11 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
             << "  lepton mode: " << leptonMode << "\n"
             << "  jet pt min: " << jetPtMin << "\n"
             << "  muon pt min: " << muonPtMin << "\n"
+            << "  muon iso max: " << muonIsoMax << "\n"
+            << "  muon ID: " << muonIdMode << "\n"
+            << "  HT jet pt min: " << htJetPtMin << "\n"
+            << "  HT jet eta max: " << htJetEtaMax << "\n"
+            << "  HT jet ID min: " << htJetIdMin << "\n"
             << "  processed events: " << processed << "\n"
             << "  certified data lumis: " << certifiedLumis.size() << "\n"
             << "  sum gen weights: " << sumGenWeights << "\n"

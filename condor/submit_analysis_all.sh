@@ -24,6 +24,10 @@ MUON_PT_MIN="30"
 MUON_ETA_MAX="2.5"
 MUON_ISO_MAX="0.3"
 MUON_ISO_BRANCH="auto"
+MUON_ID="none"
+HT_JET_PT_MIN="30"
+HT_JET_ETA_MAX="2.4"
+HT_JET_ID_MIN="2"
 MIN_DPHI="1.5"
 USE_X509="0"
 REQUIRE_HDFS="auto"
@@ -33,6 +37,7 @@ INPUT_PREFIX="auto"
 HDFS_XROOTD_PREFIX="${AK15_HDFS_XROOTD_PREFIX:-root://cmsxrootd.hep.wisc.edu//}"
 PREFETCH_XROOTD="0"
 DIRECT_OUTPUT_FILES="0"
+LOG_DIR="condor/.logs"
 STAGE_INPUT_FILES="auto"
 DRY_RUN="0"
 NO_SUBMIT="0"
@@ -60,6 +65,11 @@ Options:
   --muon-eta-max X           Default: 2.5
   --muon-iso-max X           Default: 0.3
   --muon-iso-branch NAME     Default: auto
+  --muon-id none|medium|tight
+                              Default: none
+  --ht-jet-pt-min X          Default: 30
+  --ht-jet-eta-max X         Default: 2.4
+  --ht-jet-id-min N          Default: 2 (tight Jet_jetId)
   --min-dphi X               Default: 1.5
   --use-x509                 Transfer current VOMS proxy
   --require-hdfs 0|1|auto    Default: auto
@@ -67,6 +77,7 @@ Options:
   --hdfs-xrootd-prefix URL  Override the xrootd prefix used for /hdfs/store inputs.
   --prefetch-xrootd         Copy xrootd inputs to worker scratch before CMSSW starts.
   --direct-output-files 0|1 Copy compact ROOT outputs directly to OUTPUT_DIR.
+  --log-dir DIR              Condor event/stdout/stderr directory. Default: condor/.logs
   --stage-input-files 0|1|auto
                               Transfer local phase-1 ROOT files to the worker.
                               Default: auto for /nfs_scratch inputs.
@@ -98,6 +109,10 @@ while [[ $# -gt 0 ]]; do
     --muon-eta-max) MUON_ETA_MAX="$2"; shift 2 ;;
     --muon-iso-max) MUON_ISO_MAX="$2"; shift 2 ;;
     --muon-iso-branch) MUON_ISO_BRANCH="$2"; shift 2 ;;
+    --muon-id) MUON_ID="$2"; shift 2 ;;
+    --ht-jet-pt-min) HT_JET_PT_MIN="$2"; shift 2 ;;
+    --ht-jet-eta-max) HT_JET_ETA_MAX="$2"; shift 2 ;;
+    --ht-jet-id-min) HT_JET_ID_MIN="$2"; shift 2 ;;
     --min-dphi) MIN_DPHI="$2"; shift 2 ;;
     --use-x509) USE_X509="1"; shift ;;
     --require-hdfs) REQUIRE_HDFS="$2"; shift 2 ;;
@@ -107,6 +122,7 @@ while [[ $# -gt 0 ]]; do
     --hdfs-xrootd-prefix) HDFS_XROOTD_PREFIX="$2"; shift 2 ;;
     --prefetch-xrootd) PREFETCH_XROOTD="1"; shift ;;
     --direct-output-files) DIRECT_OUTPUT_FILES="$2"; shift 2 ;;
+    --log-dir) LOG_DIR="$2"; shift 2 ;;
     --stage-input-files) STAGE_INPUT_FILES="$2"; shift 2 ;;
     --dry-run) DRY_RUN="1"; shift ;;
     --no-submit) NO_SUBMIT="1"; shift ;;
@@ -141,8 +157,10 @@ if [[ ! -f "${CONFIG}" ]]; then
   exit 2
 fi
 
-mkdir -p condor/.logs
-mkdir -p "${RETURN_DIR}"
+mkdir -p "${LOG_DIR}"
+if [[ "${DIRECT_OUTPUT_FILES}" != "1" ]]; then
+  mkdir -p "${RETURN_DIR}"
+fi
 case "${OUTPUT_DIR}" in
   root://*|davs://*|gsiftp://*) ;;
   *) mkdir -p "${OUTPUT_DIR}" ;;
@@ -250,6 +268,10 @@ echo "Analysis config: ${CONFIG}"
 echo "Sample label: ${SAMPLE_LABEL}"
 echo "Jet pT min: ${JET_PT_MIN}"
 echo "Muon-only analysis mode: ${LEPTON_MODE}"
+echo "Muon pT min: ${MUON_PT_MIN}"
+echo "Muon isolation max: ${MUON_ISO_MAX}"
+echo "Muon ID: ${MUON_ID}"
+echo "HT jet selection: pT>${HT_JET_PT_MIN}, abs(eta)<${HT_JET_ETA_MAX}, Jet_jetId>=${HT_JET_ID_MIN}"
 echo "Stage input files: ${STAGE_INPUT_FILES}"
 
 if [[ "${NO_SUBMIT}" == "1" ]]; then
@@ -259,6 +281,7 @@ fi
 
 submit_args=(
   JOB_TABLE="${JOB_TABLE}"
+  AK15_LOG_DIR="${LOG_DIR}"
   AK15_MAX_RETRIES="${MAX_RETRIES}"
   AK15_REQUEST_DISK="${REQUEST_DISK}"
   AK15_PREFETCH_XROOTD="${PREFETCH_XROOTD}"
@@ -273,8 +296,25 @@ submit_args=(
   MUON_ETA_MAX="${MUON_ETA_MAX}"
   MUON_ISO_MAX="${MUON_ISO_MAX}"
   MUON_ISO_BRANCH="${MUON_ISO_BRANCH}"
+  MUON_ID="${MUON_ID}"
+  HT_JET_PT_MIN="${HT_JET_PT_MIN}"
+  HT_JET_ETA_MAX="${HT_JET_ETA_MAX}"
+  HT_JET_ID_MIN="${HT_JET_ID_MIN}"
   MIN_DPHI="${MIN_DPHI}"
 )
+
+if [[ "${DIRECT_OUTPUT_FILES}" == "1" ]]; then
+  submit_args+=(
+    AK15_TRANSFER_OUTPUT_FILES=""
+    AK15_TRANSFER_OUTPUT_REMAPS=""
+  )
+else
+  transfer_name='analysis_outputs_$(DATASET_TAG)_$(CHUNK_ID).tgz'
+  submit_args+=(
+    AK15_TRANSFER_OUTPUT_FILES="${transfer_name}"
+    AK15_TRANSFER_OUTPUT_REMAPS="${transfer_name} = \$(RETURN_DIR)/${transfer_name}"
+  )
+fi
 
 if [[ "${DRY_RUN}" == "1" ]]; then
   condor_submit "${submit_args[@]}" -dry-run "condor/.generated/${TAG}/analysis_dryrun.ad" condor/submit_analysis.sub
