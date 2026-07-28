@@ -243,6 +243,8 @@ Important settings:
 | `--input-prefix` | Control local, HDFS-xrootd, or unmodified input paths |
 | `--prefetch-xrootd` | Copy xrootd Nano inputs on the worker host before entering EL7 |
 | `--direct-output-files 0\|1` | Copy ROOT outputs to an xrootd output URL and return only an audit tarball |
+| `--transfer-output-tarball 0\|1` | Disable Condor return transfer when all durable outputs are copied directly |
+| `--log-dir` | Set the Condor stdout, stderr, and event-log directory; use `/dev/null` for direct-output campaigns |
 | `--request-disk` | Condor scratch request in KB for Stage 1 |
 | `--max-retries` | Automatic retries after nonzero payload exits |
 
@@ -304,12 +306,30 @@ bash condor/submit_analysis_all.sh \
   --require-hdfs 0
 ```
 
-The compact output stores `eventHT` as the scalar pT sum of ordinary AK4 jets
+The compact output stores `eventHT` and `eventHT4` as the scalar pT sum of ordinary AK4 jets
 passing the configured pT, eta, and `Jet_jetId` requirements. It also stores
 the selected muon's medium/tight ID decisions and an `AnalysisMetadata` tree
 containing the exact selection configuration. The data and MC definitions of
 `eventHT` are identical; generator HT is used only to label and normalize the
 W+jets source samples.
+
+New leading-only Nano files also store `SuperFatJetAK15_originalAK15HT`, the
+scalar sum of all reconstructed AK15 jet transverse momenta before non-leading
+rows are removed. The compact reducer writes this value as `eventHT15` and sets
+`eventHT15IsComplete=1`. Full-AK15 inputs are summed directly. Older
+leading-only files without this metadata are marked incomplete instead of
+silently treating the retained leading jet as the full event sum.
+
+For an AK4 eta-acceptance study, use
+`config/analysis_muon_2018_eta_diagnostic.json`. After the tight-muon and
+strict-leading-AK15 baseline (at least one AK15 jet is required, and the
+global highest-pT jet is tested), the reducer fills
+`ak4_jet_eta_preselection` for every reconstructed AK4 jet with
+`pT > 30 GeV` and `Jet_jetId >= 2` before applying an AK4 eta requirement.
+The same compact output includes MET and
+`mT(mu,MET) = sqrt(2 pT(mu) MET [1-cos(DeltaPhi(mu,MET))])`. These are
+diagnostic observables; the configuration does not impose HT, MET, or
+transverse-mass cuts.
 
 ## Luminosity and Weighted Plots
 
@@ -332,8 +352,8 @@ cp config/samples_2018.example.csv config/samples_2018.csv
 
 The current UL2018 W+jets, ttbar, and QCD normalization inputs are recorded in
 `config/cross_sections_ul2018.csv`, including the provisional status of the
-W+jets HT70-100 value. The active QCD entries cover HT300-500, 500-700,
-700-1000, 1000-1500, 1500-2000, and 2000-Inf.
+W+jets HT70-100 value. The active QCD entries cover HT200-300, 300-500,
+500-700, 700-1000, 1000-1500, 1500-2000, and 2000-Inf.
 
 For a reproducible file-complete MC subset, select files by event count rather
 than taking the first fraction of a DAS file list:

@@ -305,7 +305,7 @@ submit_args=(
 
 if [[ "${DIRECT_OUTPUT_FILES}" == "1" ]]; then
   submit_args+=(
-    AK15_TRANSFER_OUTPUT_FILES=""
+    AK15_TRANSFER_OUTPUT_FILES='""'
     AK15_TRANSFER_OUTPUT_REMAPS=""
     AK15_STDOUT="/dev/null"
     AK15_STDERR="/dev/null"

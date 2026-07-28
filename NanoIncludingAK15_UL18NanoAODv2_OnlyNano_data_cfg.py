@@ -126,6 +126,7 @@ process.leadingPatJetsAK15PFCHS = cms.EDProducer(
     src = cms.InputTag("packedPatJetsAK15PFCHSSoftDrop"),
     sourceIndexName = cms.string("leadingAK15SourceJetIdx"),
     sourceMultiplicityName = cms.string("originalAK15Multiplicity"),
+    sourceHTName = cms.string("originalAK15HT"),
 )
 
 process.leadingPatSubjetsAK15PFCHS = cms.EDProducer(
@@ -216,6 +217,12 @@ if options.ak15LeadingOnly:
         "userInt('originalAK15Multiplicity')",
         int,
         doc="number of AK15 jets before leading-jet reduction",
+    )
+    process.jetAK15Table.variables.originalAK15HT = Var(
+        "userFloat('originalAK15HT')",
+        float,
+        doc="scalar sum of reconstructed AK15 jet transverse momenta before leading-jet reduction",
+        precision=10,
     )
     process.subjetTable.src = cms.InputTag("leadingPatSubjetsAK15PFCHS")
     process.subjetTable.variables.leadingAK15SourceSubjetIdx = Var(

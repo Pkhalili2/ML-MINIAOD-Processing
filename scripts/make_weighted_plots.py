@@ -11,6 +11,12 @@ import sys
 
 
 PLOTS = {
+    "ak4_jet_eta_preselection": {
+        "source_hist": "ak4_jet_eta_preselection",
+        "bins": (60, -5.0, 5.0),
+        "title": "AK4 jet pseudorapidity before eta acceptance",
+        "x_title": "AK4 jet #eta",
+    },
     "event_ht": {
         "branches": ["eventHT"],
         "bins": (50, 0.0, 2500.0),
@@ -103,6 +109,25 @@ PLOTS = {
         "bins": (16, -0.5, 15.5),
         "title": "AK4 jet multiplicity entering H_{T}",
         "x_title": "Number of AK4 jets in H_{T}",
+    },
+    "event_ht15": {
+        "branches": ["eventHT15"],
+        "requires": [("eventHT15IsComplete", 1)],
+        "bins": (50, 0.0, 2500.0),
+        "title": "Reconstructed event H_{T}^{AK15}",
+        "x_title": "AK15-jet H_{T} [GeV]",
+    },
+    "met_pt": {
+        "branches": ["met_pt"],
+        "bins": (40, 0.0, 400.0),
+        "title": "Missing transverse momentum before MET selection",
+        "x_title": "p_{T}^{miss} [GeV]",
+    },
+    "muon_met_transverse_mass": {
+        "branches": ["muonMetTransverseMass"],
+        "bins": (40, 0.0, 400.0),
+        "title": "Muon-MET transverse mass before m_{T} selection",
+        "x_title": "m_{T}(#mu, p_{T}^{miss}) [GeV]",
     },
 }
 
@@ -273,6 +298,13 @@ def event_value(event, chain, plot_name):
     raise AttributeError("No available branch or derivation for plot %s" % plot_name)
 
 
+def passes_plot_requirements(event, chain, plot_name):
+    for branch, expected in PLOTS[plot_name].get("requires", []):
+        if not has_branch(chain, branch) or int(getattr(event, branch)) != expected:
+            return False
+    return True
+
+
 def sample_color(ROOT, row, index):
     raw = str(row.get("color", "")).strip()
     if raw:
@@ -297,6 +329,32 @@ def make_hist(ROOT, name, plot_name):
     hist = ROOT.TH1D(name, "", nbins, xmin, xmax)
     hist.SetDirectory(0)
     return hist
+
+
+def aggregate_source_hist(ROOT, row, plot_name):
+    source_name = PLOTS[plot_name]["source_hist"]
+    combined = None
+    missing = []
+    for path in row["_files"]:
+        root_file = ROOT.TFile.Open(path)
+        source = root_file.Get(source_name) if root_file and not root_file.IsZombie() else None
+        if not source:
+            missing.append(path)
+        elif combined is None:
+            combined = source.Clone(safe_name(row["sample"]) + "_" + safe_name(plot_name))
+            combined.SetDirectory(0)
+        else:
+            combined.Add(source)
+        if root_file:
+            root_file.Close()
+    if missing:
+        raise SystemExit(
+            "Sample %s is missing histogram %s in %d file(s): %s"
+            % (row["sample"], source_name, len(missing), ", ".join(missing[:5]))
+        )
+    if not combined:
+        raise SystemExit("Sample %s has no histogram %s" % (row["sample"], source_name))
+    return combined
 
 
 def fold_flow_bins(hist):
@@ -777,9 +835,17 @@ def main():
         if entries == 0:
             raise SystemExit("Sample %s has zero entries in tree %s" % (row["sample"], args.tree))
 
-        sample_hists = dict(
-            (plot, make_hist(ROOT, safe_name(row["sample"]) + "_" + safe_name(plot), plot)) for plot in plots
-        )
+        sample_hists = {}
+        for plot in plots:
+            if PLOTS[plot].get("source_hist"):
+                hist = aggregate_source_hist(ROOT, row, plot)
+                if row["type"] != "data":
+                    hist.Scale(event_scale)
+                sample_hists[plot] = hist
+            else:
+                sample_hists[plot] = make_hist(
+                    ROOT, safe_name(row["sample"]) + "_" + safe_name(plot), plot
+                )
         for hist in sample_hists.values():
             style_hist(ROOT, row, hist, row["_color"])
 
@@ -795,6 +861,10 @@ def main():
                 weight = gen_weight * event_scale
             selected_sumw += gen_weight
             for plot in plots:
+                if PLOTS[plot].get("source_hist"):
+                    continue
+                if not passes_plot_requirements(event, chain, plot):
+                    continue
                 sample_hists[plot].Fill(event_value(event, chain, plot), weight)
 
         for hist in sample_hists.values():

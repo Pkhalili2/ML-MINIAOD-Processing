@@ -19,7 +19,8 @@ public:
   explicit LeadingAK15JetProducer(const edm::ParameterSet& config)
       : srcToken_(consumes<pat::JetCollection>(config.getParameter<edm::InputTag>("src"))),
         sourceIndexName_(config.getParameter<std::string>("sourceIndexName")),
-        sourceMultiplicityName_(config.getParameter<std::string>("sourceMultiplicityName")) {
+        sourceMultiplicityName_(config.getParameter<std::string>("sourceMultiplicityName")),
+        sourceHTName_(config.getParameter<std::string>("sourceHTName")) {
     produces<pat::JetCollection>();
   }
 
@@ -31,12 +32,17 @@ public:
 
     auto output = std::make_unique<pat::JetCollection>();
     if (!jets->empty()) {
+      double sourceHT = 0.0;
+      for (const auto& sourceJet : *jets) {
+        sourceHT += sourceJet.pt();
+      }
       const auto leading = std::max_element(
           jets->begin(), jets->end(),
           [](const pat::Jet& lhs, const pat::Jet& rhs) { return lhs.pt() < rhs.pt(); });
       pat::Jet jet(*leading);
       jet.addUserInt(sourceIndexName_, static_cast<int>(std::distance(jets->begin(), leading)));
       jet.addUserInt(sourceMultiplicityName_, static_cast<int>(jets->size()));
+      jet.addUserFloat(sourceHTName_, static_cast<float>(sourceHT));
       output->push_back(std::move(jet));
     }
 
@@ -48,6 +54,7 @@ public:
     description.add<edm::InputTag>("src", edm::InputTag("packedPatJetsAK15PFCHSSoftDrop"));
     description.add<std::string>("sourceIndexName", "leadingAK15SourceJetIdx");
     description.add<std::string>("sourceMultiplicityName", "originalAK15Multiplicity");
+    description.add<std::string>("sourceHTName", "originalAK15HT");
     descriptions.add("LeadingAK15JetProducer", description);
   }
 
@@ -55,6 +62,7 @@ private:
   edm::EDGetTokenT<pat::JetCollection> srcToken_;
   std::string sourceIndexName_;
   std::string sourceMultiplicityName_;
+  std::string sourceHTName_;
 };
 
 DEFINE_FWK_MODULE(LeadingAK15JetProducer);

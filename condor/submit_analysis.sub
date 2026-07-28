@@ -7,7 +7,7 @@ preserve_relative_paths = False
 transfer_executable     = False
 
 transfer_input_files    = condor/package.tgz,condor_analysis_bootstrap.sh,$(INPUT_LIST),$(EXTRA_INPUT_FILES)
-transfer_output_files   = "$(AK15_TRANSFER_OUTPUT_FILES)"
+transfer_output_files   = $(AK15_TRANSFER_OUTPUT_FILES)
 transfer_output_remaps  = "$(AK15_TRANSFER_OUTPUT_REMAPS)"
 
 output                  = $(AK15_STDOUT)

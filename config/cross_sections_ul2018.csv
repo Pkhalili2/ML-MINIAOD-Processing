@@ -10,6 +10,7 @@ WJets_HT2500toInf,0.0389136,BoostedHTT WeightCalculator.h XMass20,active,"0.0321
 TTTo2L2Nu,88.29,BoostedHTT WeightCalculator.h XMass20,active,UL2018 channel cross section
 TTToHadronic,377.96,BoostedHTT WeightCalculator.h XMass20,active,UL2018 channel cross section
 TTToSemiLeptonic,365.34,BoostedHTT WeightCalculator.h XMass20,active,UL2018 channel cross section
+QCD_HT200to300,1712000,BoostedHTT WeightCalculator.h XMass20,active,"Existing value approved by the analysis supervisor on 2026-07-28"
 QCD_HT300to500,347700,BoostedHTT WeightCalculator.h XMass20,active,UL2018 QCD HT-binned cross section
 QCD_HT500to700,32100,BoostedHTT WeightCalculator.h XMass20,active,UL2018 QCD HT-binned cross section
 QCD_HT700to1000,6831,BoostedHTT WeightCalculator.h XMass20,active,UL2018 QCD HT-binned cross section

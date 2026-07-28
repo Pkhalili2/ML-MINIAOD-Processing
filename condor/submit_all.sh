@@ -29,6 +29,8 @@ INPUT_PREFIX="auto"
 PREFETCH_XROOTD="0"
 DIRECT_OUTPUT_TARBALL="auto"
 DIRECT_OUTPUT_FILES="0"
+TRANSFER_OUTPUT_TARBALL="1"
+LOG_DIR="condor/.logs"
 DRY_RUN="0"
 NO_SUBMIT="0"
 CLEAR="1"
@@ -63,6 +65,8 @@ Options:
   --direct-output-tarball 0|1|auto
                                   Default: 0 for phase2, 1 otherwise
   --direct-output-files 0|1       Copy ROOT outputs directly to OUTPUT_DIR and return an audit tarball
+  --transfer-output-tarball 0|1   Transfer the output tarball back through Condor. Default: 1
+  --log-dir DIR                   Condor log directory, or /dev/null. Default: condor/.logs
   --dry-run                      Build the submit ClassAd without submitting
   --no-submit                    Prepare lists/package but do not call condor_submit
   --no-clear                     Keep old generated files for this tag
@@ -96,6 +100,8 @@ while [[ $# -gt 0 ]]; do
     --prefetch-xrootd) PREFETCH_XROOTD="1"; shift ;;
     --direct-output-tarball) DIRECT_OUTPUT_TARBALL="$2"; shift 2 ;;
     --direct-output-files) DIRECT_OUTPUT_FILES="$2"; shift 2 ;;
+    --transfer-output-tarball) TRANSFER_OUTPUT_TARBALL="$2"; shift 2 ;;
+    --log-dir) LOG_DIR="$2"; shift 2 ;;
     --dry-run) DRY_RUN="1"; shift ;;
     --no-submit) NO_SUBMIT="1"; shift ;;
     --no-clear) CLEAR="0"; shift ;;
@@ -132,6 +138,10 @@ if [[ "${DIRECT_OUTPUT_FILES}" != "0" && "${DIRECT_OUTPUT_FILES}" != "1" ]]; the
   echo "ERROR: --direct-output-files must be 0 or 1"
   exit 2
 fi
+if [[ "${TRANSFER_OUTPUT_TARBALL}" != "0" && "${TRANSFER_OUTPUT_TARBALL}" != "1" ]]; then
+  echo "ERROR: --transfer-output-tarball must be 0 or 1"
+  exit 2
+fi
 
 if [[ -z "${OUTPUT_DIR}" ]]; then
   OUTPUT_DIR="${AK15_OUTPUT_BASE:-/nfs_scratch/${USER}/ak15_condor_outputs}/${TAG}"
@@ -145,6 +155,9 @@ fi
 
 cd "${REPO_ROOT}"
 mkdir -p condor/.logs
+if [[ "${LOG_DIR}" != "/dev/null" ]]; then
+  mkdir -p "${LOG_DIR}"
+fi
 mkdir -p "${RETURN_DIR}"
 case "${OUTPUT_DIR}" in
   root://*|davs://*|gsiftp://*) ;;
@@ -202,6 +215,24 @@ echo "NanoAOD config type: ${CONFIG_TYPE}"
 echo "Leading AK15 only: ${AK15_LEADING_ONLY}"
 echo "Condor max retries after payload failure: ${MAX_RETRIES}"
 echo "Condor requested disk: ${REQUEST_DISK}"
+echo "Condor output tarball transfer: ${TRANSFER_OUTPUT_TARBALL}"
+
+if [[ "${TRANSFER_OUTPUT_TARBALL}" == "1" ]]; then
+  AK15_TRANSFER_OUTPUT_FILES='root_outputs_$(DATASET_TAG)_$(CHUNK_ID).tgz'
+  AK15_TRANSFER_OUTPUT_REMAPS='root_outputs_$(DATASET_TAG)_$(CHUNK_ID).tgz = $(RETURN_DIR)/root_outputs_$(DATASET_TAG)_$(CHUNK_ID).tgz'
+else
+  AK15_TRANSFER_OUTPUT_FILES='""'
+  AK15_TRANSFER_OUTPUT_REMAPS=""
+fi
+if [[ "${LOG_DIR}" == "/dev/null" ]]; then
+  AK15_STDOUT="/dev/null"
+  AK15_STDERR="/dev/null"
+  AK15_EVENT_LOG="/dev/null"
+else
+  AK15_STDOUT="${LOG_DIR}/\$(DATASET_TAG)_\$(CHUNK_ID).out"
+  AK15_STDERR="${LOG_DIR}/\$(DATASET_TAG)_\$(CHUNK_ID).err"
+  AK15_EVENT_LOG="${LOG_DIR}/\$(DATASET_TAG)_\$(CHUNK_ID).log"
+fi
 
 if [[ "${NO_SUBMIT}" == "1" ]]; then
   echo "Not submitting because --no-submit was requested."
@@ -209,9 +240,9 @@ if [[ "${NO_SUBMIT}" == "1" ]]; then
 fi
 
 if [[ "${DRY_RUN}" == "1" ]]; then
-  condor_submit JOB_TABLE="${JOB_TABLE}" AK15_MAX_RETRIES="${MAX_RETRIES}" AK15_REQUEST_DISK="${REQUEST_DISK}" AK15_LEADING_ONLY="${AK15_LEADING_ONLY}" AK15_PREFETCH_XROOTD="${PREFETCH_XROOTD}" AK15_DIRECT_OUTPUT_TARBALL="${DIRECT_OUTPUT_TARBALL}" AK15_DIRECT_OUTPUT_FILES="${DIRECT_OUTPUT_FILES}" -dry-run "condor/.generated/${TAG}/dryrun.ad" condor/submit.sub
+  condor_submit JOB_TABLE="${JOB_TABLE}" AK15_MAX_RETRIES="${MAX_RETRIES}" AK15_REQUEST_DISK="${REQUEST_DISK}" AK15_LEADING_ONLY="${AK15_LEADING_ONLY}" AK15_PREFETCH_XROOTD="${PREFETCH_XROOTD}" AK15_DIRECT_OUTPUT_TARBALL="${DIRECT_OUTPUT_TARBALL}" AK15_DIRECT_OUTPUT_FILES="${DIRECT_OUTPUT_FILES}" AK15_TRANSFER_OUTPUT_FILES="${AK15_TRANSFER_OUTPUT_FILES}" AK15_TRANSFER_OUTPUT_REMAPS="${AK15_TRANSFER_OUTPUT_REMAPS}" AK15_STDOUT="${AK15_STDOUT}" AK15_STDERR="${AK15_STDERR}" AK15_EVENT_LOG="${AK15_EVENT_LOG}" -dry-run "condor/.generated/${TAG}/dryrun.ad" condor/submit.sub
   echo "Wrote dry-run ClassAd: condor/.generated/${TAG}/dryrun.ad"
   exit 0
 fi
 
-condor_submit JOB_TABLE="${JOB_TABLE}" AK15_MAX_RETRIES="${MAX_RETRIES}" AK15_REQUEST_DISK="${REQUEST_DISK}" AK15_LEADING_ONLY="${AK15_LEADING_ONLY}" AK15_PREFETCH_XROOTD="${PREFETCH_XROOTD}" AK15_DIRECT_OUTPUT_TARBALL="${DIRECT_OUTPUT_TARBALL}" AK15_DIRECT_OUTPUT_FILES="${DIRECT_OUTPUT_FILES}" condor/submit.sub
+condor_submit JOB_TABLE="${JOB_TABLE}" AK15_MAX_RETRIES="${MAX_RETRIES}" AK15_REQUEST_DISK="${REQUEST_DISK}" AK15_LEADING_ONLY="${AK15_LEADING_ONLY}" AK15_PREFETCH_XROOTD="${PREFETCH_XROOTD}" AK15_DIRECT_OUTPUT_TARBALL="${DIRECT_OUTPUT_TARBALL}" AK15_DIRECT_OUTPUT_FILES="${DIRECT_OUTPUT_FILES}" AK15_TRANSFER_OUTPUT_FILES="${AK15_TRANSFER_OUTPUT_FILES}" AK15_TRANSFER_OUTPUT_REMAPS="${AK15_TRANSFER_OUTPUT_REMAPS}" AK15_STDOUT="${AK15_STDOUT}" AK15_STDERR="${AK15_STDERR}" AK15_EVENT_LOG="${AK15_EVENT_LOG}" condor/submit.sub

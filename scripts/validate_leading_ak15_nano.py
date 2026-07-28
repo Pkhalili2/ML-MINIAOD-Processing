@@ -2,6 +2,7 @@
 from __future__ import print_function
 
 import argparse
+import math
 
 import ROOT
 
@@ -32,6 +33,7 @@ def main():
     parser.add_argument("input")
     parser.add_argument("--expected-events", type=int)
     parser.add_argument("--check-events", type=int, default=1000)
+    parser.add_argument("--require-original-ht", action="store_true")
     args = parser.parse_args()
 
     source = ROOT.TFile.Open(args.input)
@@ -61,6 +63,8 @@ def main():
         "SuperFatJetAK15_originalAK15Multiplicity",
         "SuperFatJetAK15PFCand_jetIdx",
     }
+    if args.require_original_ht:
+        metadata.add("SuperFatJetAK15_originalAK15HT")
     require(ordinary.issubset(branches), "ordinary NanoAOD or muon branches are missing")
     require(metadata.issubset(branches), "leading-only AK15 metadata is incomplete")
 
@@ -94,6 +98,14 @@ def main():
                 "leading AK15 source index is invalid",
             )
             jets += 1
+            if args.require_original_ht:
+                original_ht = list(tree.SuperFatJetAK15_originalAK15HT)
+                require(len(original_ht) == 1, "original AK15 HT metadata is inconsistent")
+                require(math.isfinite(original_ht[0]), "original AK15 HT is not finite")
+                require(
+                    original_ht[0] + 1.0e-3 >= list(tree.SuperFatJetAK15_pt)[0],
+                    "original AK15 HT is smaller than the retained leading-jet pT",
+                )
 
         pf_indices = list(tree.SuperFatJetAK15PFCand_jetIdx)
         require(

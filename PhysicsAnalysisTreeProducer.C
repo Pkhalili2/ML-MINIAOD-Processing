@@ -276,6 +276,8 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
       "Jet_pt",
       "Jet_eta",
       "Jet_jetId",
+      "MET_pt",
+      "MET_phi",
       "nSuperFatJetAK15",
       "SuperFatJetAK15_pt",
       "SuperFatJetAK15_eta",
@@ -320,6 +322,8 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
   TTreeReaderArray<Float_t> recoJetPt(reader, "Jet_pt");
   TTreeReaderArray<Float_t> recoJetEta(reader, "Jet_eta");
   TTreeReaderArray<Int_t> recoJetId(reader, "Jet_jetId");
+  TTreeReaderValue<Float_t> metPt(reader, "MET_pt");
+  TTreeReaderValue<Float_t> metPhi(reader, "MET_phi");
 
   TTreeReaderValue<UInt_t> nAK15(reader, "nSuperFatJetAK15");
   TTreeReaderArray<Float_t> ak15Pt(reader, "SuperFatJetAK15_pt");
@@ -330,6 +334,8 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
       optionalArray<Int_t>(reader, tree, "SuperFatJetAK15_leadingAK15SourceJetIdx");
   auto jetOriginalMultiplicity =
       optionalArray<Int_t>(reader, tree, "SuperFatJetAK15_originalAK15Multiplicity");
+  auto jetOriginalHT =
+      optionalArray<Float_t>(reader, tree, "SuperFatJetAK15_originalAK15HT");
   auto genWeight = optionalValue<Float_t>(reader, tree, "genWeight");
   if (!isData && !genWeight) {
     std::cerr << "ERROR: MC input is missing required genWeight branch" << std::endl;
@@ -358,6 +364,20 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
   labelCutflow(cutflowWeighted);
   cutflow.Sumw2();
   cutflowWeighted.Sumw2();
+  TH1D ak4JetEtaPreselection(
+      "ak4_jet_eta_preselection",
+      "AK4 jet pseudorapidity before eta acceptance;AK4 jet #eta;sum of event weights",
+      60,
+      -5.0,
+      5.0);
+  TH1D ak4JetEtaPreselectionRaw(
+      "ak4_jet_eta_preselection_raw",
+      "AK4 jet pseudorapidity before eta acceptance;AK4 jet #eta;jets",
+      60,
+      -5.0,
+      5.0);
+  ak4JetEtaPreselection.Sumw2();
+  ak4JetEtaPreselectionRaw.Sumw2();
 
   TH1D normalization("normalization", "Analysis normalization metadata", 5, 0.5, 5.5);
   normalization.GetXaxis()->SetBinLabel(1, "processed_events");
@@ -413,7 +433,15 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
   Int_t nInputMuon = 0;
   Int_t nInputAK15 = 0;
   Int_t nHTJet = 0;
+  Int_t nHT15Jet = -1;
   Float_t eventHT = 0.0;
+  Float_t eventHT4 = 0.0;
+  Float_t eventHT15 = kMissing;
+  Int_t eventHT15IsComplete = 0;
+  Float_t outMetPt = kMissing;
+  Float_t outMetPhi = kMissing;
+  Float_t muonMetDeltaPhi = kMissing;
+  Float_t muonMetTransverseMass = kMissing;
   Float_t selectedMuonPt = kMissing;
   Float_t selectedMuonEta = kMissing;
   Float_t selectedMuonPhi = kMissing;
@@ -456,6 +484,14 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
   out.Branch("selectedSourceJetIdx", &selectedSourceJetIdx);
   out.Branch("nHTJet", &nHTJet);
   out.Branch("eventHT", &eventHT);
+  out.Branch("eventHT4", &eventHT4);
+  out.Branch("nHT15Jet", &nHT15Jet);
+  out.Branch("eventHT15", &eventHT15);
+  out.Branch("eventHT15IsComplete", &eventHT15IsComplete);
+  out.Branch("met_pt", &outMetPt);
+  out.Branch("met_phi", &outMetPhi);
+  out.Branch("muonMetDeltaPhi", &muonMetDeltaPhi);
+  out.Branch("muonMetTransverseMass", &muonMetTransverseMass);
   out.Branch("jet_pt", &jet_pt);
   out.Branch("jet_eta", &jet_eta);
   out.Branch("jet_phi", &jet_phi);
@@ -555,6 +591,12 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
     }
     cutflow.Fill(7);
     cutflowWeighted.Fill(7, eventWeight);
+    for (UInt_t j = 0; j < *nRecoJet; ++j) {
+      if (recoJetPt[j] <= htJetPtMin) continue;
+      if (recoJetId[j] < htJetIdMin) continue;
+      ak4JetEtaPreselection.Fill(recoJetEta[j], eventWeight);
+      ak4JetEtaPreselectionRaw.Fill(recoJetEta[j]);
+    }
 
     outRun = *run;
     outLuminosityBlock = *luminosityBlock;
@@ -576,14 +618,37 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
     selectedLeptonPhi = selectedMuonPhi;
     selectedLeptonIso = selectedMuonIso;
     nHTJet = 0;
-    eventHT = 0.0;
+    eventHT4 = 0.0;
     for (UInt_t j = 0; j < *nRecoJet; ++j) {
       if (recoJetPt[j] <= htJetPtMin) continue;
       if (std::abs(recoJetEta[j]) >= htJetEtaMax) continue;
       if (recoJetId[j] < htJetIdMin) continue;
-      eventHT += recoJetPt[j];
+      eventHT4 += recoJetPt[j];
       ++nHTJet;
     }
+    eventHT = eventHT4;
+    eventHT15 = kMissing;
+    nHT15Jet = -1;
+    eventHT15IsComplete = 0;
+    if (jetOriginalHT && *nAK15 > 0) {
+      eventHT15 = (*jetOriginalHT)[bestJetIdx];
+      nHT15Jet = nInputAK15;
+      eventHT15IsComplete = 1;
+    } else if (!jetOriginalMultiplicity || nInputAK15 == static_cast<Int_t>(*nAK15)) {
+      eventHT15 = 0.0;
+      for (UInt_t j = 0; j < *nAK15; ++j) {
+        eventHT15 += ak15Pt[j];
+      }
+      nHT15Jet = static_cast<Int_t>(*nAK15);
+      eventHT15IsComplete = 1;
+    }
+    outMetPt = *metPt;
+    outMetPhi = *metPhi;
+    muonMetDeltaPhi = std::abs(deltaPhiSigned(selectedMuonPhi, outMetPhi));
+    muonMetTransverseMass = std::sqrt(
+        std::max(0.0, 2.0 * static_cast<double>(selectedMuonPt) *
+                          static_cast<double>(outMetPt) *
+                          (1.0 - std::cos(muonMetDeltaPhi))));
     jet_pt = ak15Pt[bestJetIdx];
     jet_eta = ak15Eta[bestJetIdx];
     jet_phi = ak15Phi[bestJetIdx];
@@ -617,6 +682,8 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
   out.Write();
   cutflow.Write();
   cutflowWeighted.Write();
+  ak4JetEtaPreselection.Write();
+  ak4JetEtaPreselectionRaw.Write();
   normalization.Write();
   analysisMetadata.Write();
   luminosityBlocks.Write();

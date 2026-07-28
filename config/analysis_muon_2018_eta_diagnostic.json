@@ -1,0 +1,17 @@
+{
+  "analysis": "muon_ak15_2018_eta_diagnostic",
+  "lumi_pb": 37997.277757686,
+  "jet_pt_min": 200.0,
+  "jet_eta_max": 3.0,
+  "lepton_mode": "muon",
+  "muon_pt_min": 55.0,
+  "muon_eta_max": 2.5,
+  "muon_iso_max": 0.15,
+  "muon_iso_branch": "Muon_pfRelIso04_all",
+  "muon_id": "tight",
+  "ht_jet_pt_min": 30.0,
+  "ht_jet_eta_max": 5.0,
+  "ht_jet_id_min": 2,
+  "min_dphi": 1.5,
+  "lumi_mask": "config/Cert_314472-325175_13TeV_Legacy2018_Collisions18_JSON.txt"
+}
