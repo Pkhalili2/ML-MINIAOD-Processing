@@ -330,9 +330,27 @@ Prepare a metadata table from the example:
 cp config/samples_2018.example.csv config/samples_2018.csv
 ```
 
-The current UL2018 W+jets and ttbar normalization inputs are recorded in
+The current UL2018 W+jets, ttbar, and QCD normalization inputs are recorded in
 `config/cross_sections_ul2018.csv`, including the provisional status of the
-HT70-100 value.
+W+jets HT70-100 value. The active QCD entries cover HT300-500, 500-700,
+700-1000, 1000-1500, 1500-2000, and 2000-Inf.
+
+For a reproducible file-complete MC subset, select files by event count rather
+than taking the first fraction of a DAS file list:
+
+```bash
+python scripts/select_das_event_fraction.py \
+  --dataset /QCD_HT300to500_TuneCP5_13TeV-madgraphMLM-pythia8/RunIISummer20UL18MiniAODv2-106X_upgrade2018_realistic_v16_L1v1-v2/MINIAODSIM \
+  --fraction 0.10 \
+  --seed qcd-ul18 \
+  --cache campaign/das_qcd_ht300to500.json \
+  --output campaign/qcd_ht300to500_10pct.txt \
+  --metadata campaign/qcd_ht300to500_10pct.json
+```
+
+Use `--allowed-files` with a newline-delimited LFN list when the campaign must
+be restricted to files verified at a particular disk RSE. The fraction target
+is still calculated from the full DAS dataset event count.
 
 Use `stack_group` and `stack_label` to combine separately normalized samples
 into one displayed stack category. Set `cutflow_valid=0` for a sample whose
@@ -360,6 +378,13 @@ The plotting script stacks backgrounds, overlays data and signal, draws the MC
 statistical uncertainty, writes cumulative cutflow and normalization CSV
 files, and adds a `Data / sum(MC)` lower panel.
 
+`config/samples_tightid_ht_with_qcd_2018_20260726.csv` is the tight-muon HT
+configuration with the six QCD bins displayed as one `QCD multijet` stack
+component. Each bin is normalized independently with its own cross section and
+processed `sumGenWeights` before grouping. The QCD subset fraction does not
+multiply the event weights; its smaller processed `sumGenWeights` supplies the
+corresponding normalization to the inclusive process cross section.
+
 Audit compact analysis outputs before plotting:
 
 ```bash
@@ -383,6 +408,19 @@ Before expanding a campaign:
 5. inspect its event log, stdout, stderr, exit code, and returned tarball;
 6. verify the requested HDFS and NFS destinations;
 7. estimate logical and replicated storage before increasing the job count.
+
+For leading-only Stage-1 Nano outputs, run:
+
+```bash
+python scripts/validate_leading_ak15_nano.py \
+  root://cmsxrootd.hep.wisc.edu//store/user/$USER/AK15/nano_sample.root \
+  --expected-events <source-file-events> \
+  --check-events 1000
+```
+
+This verifies the event count, ordinary NanoAOD and muon branches, at most one
+custom AK15 row, leading-only metadata, and remapped PF/generator constituent
+indices.
 
 Do not treat a completed Condor process as successful until its returned ROOT
 content has been validated.
