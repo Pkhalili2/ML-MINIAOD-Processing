@@ -101,7 +101,10 @@ def main():
             if args.require_original_ht:
                 original_ht = list(tree.SuperFatJetAK15_originalAK15HT)
                 require(len(original_ht) == 1, "original AK15 HT metadata is inconsistent")
-                require(math.isfinite(original_ht[0]), "original AK15 HT is not finite")
+                require(
+                    not math.isnan(original_ht[0]) and not math.isinf(original_ht[0]),
+                    "original AK15 HT is not finite",
+                )
                 require(
                     original_ht[0] + 1.0e-3 >= list(tree.SuperFatJetAK15_pt)[0],
                     "original AK15 HT is smaller than the retained leading-jet pT",
