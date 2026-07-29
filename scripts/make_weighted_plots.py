@@ -848,7 +848,11 @@ def main():
                 round(metadata["normalization"].get("selected_events", 0.0))
             )
         if entries == 0:
-            raise SystemExit("Sample %s has zero entries in tree %s" % (row["sample"], args.tree))
+            sys.stderr.write(
+                "WARNING: sample %s has zero selected entries in tree %s; "
+                "retaining it as a zero-yield sample\n"
+                % (row["sample"], args.tree)
+            )
 
         sample_hists = {}
         for plot in plots:
