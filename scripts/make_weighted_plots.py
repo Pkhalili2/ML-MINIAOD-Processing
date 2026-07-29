@@ -14,7 +14,7 @@ PLOTS = {
     "ak4_jet_eta_preselection": {
         "source_hist": "ak4_jet_eta_preselection",
         "bins": (60, -5.0, 5.0),
-        "title": "AK4 jet pseudorapidity before eta acceptance",
+        "title": "AK4 jet pseudorapidity",
         "x_title": "AK4 jet #eta",
     },
     "event_ht": {
@@ -612,11 +612,17 @@ def draw_stack_plot(
     maxima.extend(hist.GetMaximum() for _, hist in signals)
     max_y = max(maxima) if maxima else 1.0
     if log_y:
-        frame.SetMinimum(0.3)
-        frame.SetMaximum(max(10.0, max_y * 80.0))
+        minimum = 0.3
+        maximum = max(10.0, max_y * 20.0)
     else:
-        frame.SetMinimum(0.0)
-        frame.SetMaximum(max(1.0, max_y * 1.55))
+        minimum = 0.0
+        maximum = max(1.0, max_y * 1.55)
+    if backgrounds:
+        stack.SetMinimum(minimum)
+        stack.SetMaximum(maximum)
+    else:
+        frame.SetMinimum(minimum)
+        frame.SetMaximum(maximum)
 
     uncertainty = None
     if total_bkg:
@@ -828,10 +834,19 @@ def main():
         row["_sumw"] = sumw
         row["_event_scale"] = event_scale
 
-        chain = ROOT.TChain(args.tree)
-        for path in row["_files"]:
-            chain.Add(path)
-        entries = int(chain.GetEntries())
+        needs_event_loop = any(
+            not PLOTS[plot].get("source_hist") for plot in plots
+        )
+        chain = None
+        if needs_event_loop:
+            chain = ROOT.TChain(args.tree)
+            for path in row["_files"]:
+                chain.Add(path)
+            entries = int(chain.GetEntries())
+        else:
+            entries = int(
+                round(metadata["normalization"].get("selected_events", 0.0))
+            )
         if entries == 0:
             raise SystemExit("Sample %s has zero entries in tree %s" % (row["sample"], args.tree))
 
@@ -849,23 +864,27 @@ def main():
         for hist in sample_hists.values():
             style_hist(ROOT, row, hist, row["_color"])
 
-        selected_sumw = 0.0
-        for event in chain:
-            if row["type"] == "data":
-                gen_weight = 1.0
-                weight = 1.0
-            else:
-                if not has_branch(chain, "genWeight"):
-                    raise SystemExit("MC sample %s is missing genWeight" % row["sample"])
-                gen_weight = float(getattr(event, "genWeight"))
-                weight = gen_weight * event_scale
-            selected_sumw += gen_weight
-            for plot in plots:
-                if PLOTS[plot].get("source_hist"):
-                    continue
-                if not passes_plot_requirements(event, chain, plot):
-                    continue
-                sample_hists[plot].Fill(event_value(event, chain, plot), weight)
+        selected_sumw = float(
+            metadata["normalization"].get("selected_sum_genweights", 0.0)
+        )
+        if needs_event_loop:
+            selected_sumw = 0.0
+            for event in chain:
+                if row["type"] == "data":
+                    gen_weight = 1.0
+                    weight = 1.0
+                else:
+                    if not has_branch(chain, "genWeight"):
+                        raise SystemExit("MC sample %s is missing genWeight" % row["sample"])
+                    gen_weight = float(getattr(event, "genWeight"))
+                    weight = gen_weight * event_scale
+                selected_sumw += gen_weight
+                for plot in plots:
+                    if PLOTS[plot].get("source_hist"):
+                        continue
+                    if not passes_plot_requirements(event, chain, plot):
+                        continue
+                    sample_hists[plot].Fill(event_value(event, chain, plot), weight)
 
         for hist in sample_hists.values():
             fold_flow_bins(hist)

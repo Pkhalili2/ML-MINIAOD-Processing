@@ -9,6 +9,20 @@ import sys
 
 
 REQUIRED_OBJECTS = ["Events", "cutflow", "cutflow_weighted", "normalization"]
+REQUIRED_DIAGNOSTIC_OBJECTS = [
+    "ak4_jet_eta_preselection",
+    "ak4_jet_eta_preselection_raw",
+]
+REQUIRED_DIAGNOSTIC_BRANCHES = {
+    "eventHT",
+    "eventHT4",
+    "eventHT15",
+    "eventHT15IsComplete",
+    "met_pt",
+    "met_phi",
+    "muonMetDeltaPhi",
+    "muonMetTransverseMass",
+}
 
 
 def is_remote(path):
@@ -59,6 +73,7 @@ def main():
     parser.add_argument("inputs", nargs="+")
     parser.add_argument("--expected-files", type=int)
     parser.add_argument("--require-lumis", action="store_true")
+    parser.add_argument("--require-diagnostics", action="store_true")
     parser.add_argument("--output-csv")
     args = parser.parse_args()
 
@@ -86,6 +101,12 @@ def main():
             missing = [name for name in REQUIRED_OBJECTS if not root_file.Get(name)]
             if args.require_lumis and not root_file.Get("LuminosityBlocks"):
                 missing.append("LuminosityBlocks")
+            if args.require_diagnostics:
+                missing.extend(
+                    name
+                    for name in REQUIRED_DIAGNOSTIC_OBJECTS
+                    if not root_file.Get(name)
+                )
             if missing:
                 problems.append("missing:" + ";".join(missing))
             events = root_file.Get("Events")
@@ -93,6 +114,18 @@ def main():
             weighted = root_file.Get("cutflow_weighted")
             if events:
                 entries = int(events.GetEntries())
+                if args.require_diagnostics:
+                    branches = {
+                        branch.GetName()
+                        for branch in events.GetListOfBranches()
+                    }
+                    missing_branches = sorted(
+                        REQUIRED_DIAGNOSTIC_BRANCHES - branches
+                    )
+                    if missing_branches:
+                        problems.append(
+                            "missing_branches:" + ";".join(missing_branches)
+                        )
             if cutflow:
                 raw_values = values(cutflow)
                 selected = raw_values[-1] if raw_values else -1.0
