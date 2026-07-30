@@ -21,6 +21,7 @@ REQUIRED_DIAGNOSTIC_BRANCHES = {
     "met_pt",
     "met_phi",
     "muonMetDeltaPhi",
+    "metJetDeltaPhi",
     "muonMetTransverseMass",
 }
 

@@ -120,14 +120,20 @@ PLOTS = {
     "met_pt": {
         "branches": ["met_pt"],
         "bins": (40, 0.0, 400.0),
-        "title": "Missing transverse momentum before MET selection",
+        "title": "Missing transverse momentum",
         "x_title": "p_{T}^{miss} [GeV]",
     },
     "muon_met_transverse_mass": {
         "branches": ["muonMetTransverseMass"],
         "bins": (40, 0.0, 400.0),
-        "title": "Muon-MET transverse mass before m_{T} selection",
+        "title": "Muon-MET transverse mass",
         "x_title": "m_{T}(#mu, p_{T}^{miss}) [GeV]",
+    },
+    "met_ak15_delta_phi": {
+        "branches": ["metJetDeltaPhi"],
+        "bins": (32, 0.0, 3.2),
+        "title": "MET-leading AK15 azimuthal separation",
+        "x_title": "|#Delta#phi(p_{T}^{miss}, AK15)|",
     },
 }
 
@@ -147,6 +153,9 @@ DEFAULT_PLOTS = [
     "n_input_muons",
     "n_input_ak15",
     "n_ht_jets",
+    "met_pt",
+    "muon_met_transverse_mass",
+    "met_ak15_delta_phi",
 ]
 
 CUTFLOW_STAGES = [
@@ -156,7 +165,11 @@ CUTFLOW_STAGES = [
     "muon_pass",
     "has_ak15",
     "ak15_pt_eta",
-    "dphi_pass",
+    "muon_ak15_dphi",
+    "ht4_pass",
+    "met_pass",
+    "mt_pass",
+    "met_ak15_dphi",
     "selected",
 ]
 
@@ -167,7 +180,11 @@ CUTFLOW_DISPLAY = {
     "muon_pass": "Muon selection",
     "has_ak15": "Has AK15",
     "ak15_pt_eta": "AK15 kinematics",
-    "dphi_pass": "|#Delta#phi| > 1.5",
+    "muon_ak15_dphi": "#Delta#phi(#mu, AK15) > 1.5",
+    "ht4_pass": "H_{T}^{AK4} > 200",
+    "met_pass": "p_{T}^{miss} > 30",
+    "mt_pass": "m_{T} > 50",
+    "met_ak15_dphi": "#Delta#phi(MET, AK15) > 1.0",
     "selected": "Selected",
 }
 
@@ -382,6 +399,8 @@ def canonical_cutflow(labels, values):
     mapped = dict(zip(labels, values))
     if "certified_lumi" not in mapped and "processed" in mapped:
         mapped["certified_lumi"] = mapped["processed"]
+    if "muon_ak15_dphi" not in mapped and "dphi_pass" in mapped:
+        mapped["muon_ak15_dphi"] = mapped["dphi_pass"]
     return [float(mapped.get(stage, 0.0)) for stage in CUTFLOW_STAGES]
 
 

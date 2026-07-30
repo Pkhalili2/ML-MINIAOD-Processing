@@ -23,6 +23,10 @@ Options:
                              Muon identification requirement. Default: none
   --ht-jet-pt-min X          AK4 jet pT threshold for reconstructed HT
   --ht-jet-eta-max X         AK4 jet abs(eta) limit for reconstructed HT
+  --min-event-ht X           Minimum reconstructed AK4 HT; negative disables
+  --min-met-pt X             Minimum missing transverse momentum; negative disables
+  --min-muon-met-mt X        Minimum muon-MET transverse mass; negative disables
+  --min-met-jet-dphi X       Minimum abs DeltaPhi(MET, leading AK15); negative disables
   --ht-jet-id-min N          Minimum NanoAOD Jet_jetId value for HT
   --min-dphi X               Minimum abs DeltaPhi(jet, muon). Default from config
   --lumi-mask PATH           CMS golden JSON or a run/lumi range text file
@@ -54,6 +58,10 @@ HT_JET_PT_MIN=""
 HT_JET_ETA_MAX=""
 HT_JET_ID_MIN=""
 MIN_DPHI=""
+MIN_EVENT_HT=""
+MIN_MET_PT=""
+MIN_MUON_MET_MT=""
+MIN_MET_JET_DPHI=""
 LUMI_MASK=""
 
 while [[ $# -gt 0 ]]; do
@@ -74,6 +82,10 @@ while [[ $# -gt 0 ]]; do
     --ht-jet-eta-max) HT_JET_ETA_MAX="$2"; shift 2 ;;
     --ht-jet-id-min) HT_JET_ID_MIN="$2"; shift 2 ;;
     --min-dphi) MIN_DPHI="$2"; shift 2 ;;
+    --min-event-ht) MIN_EVENT_HT="$2"; shift 2 ;;
+    --min-met-pt) MIN_MET_PT="$2"; shift 2 ;;
+    --min-muon-met-mt) MIN_MUON_MET_MT="$2"; shift 2 ;;
+    --min-met-jet-dphi) MIN_MET_JET_DPHI="$2"; shift 2 ;;
     --lumi-mask) LUMI_MASK="$2"; shift 2 ;;
     --help|-h) usage; exit 0 ;;
     *)
@@ -126,6 +138,10 @@ emit("CFG_HT_JET_ETA_MAX", "ht_jet_eta_max", 2.4)
 emit("CFG_HT_JET_ID_MIN", "ht_jet_id_min", 2)
 emit("CFG_MIN_DPHI", "min_dphi", 1.5)
 emit("CFG_LUMI_MASK", "lumi_mask", "")
+emit("CFG_MIN_EVENT_HT", "min_event_ht", -1.0)
+emit("CFG_MIN_MET_PT", "min_met_pt", -1.0)
+emit("CFG_MIN_MUON_MET_MT", "min_muon_met_transverse_mass", -1.0)
+emit("CFG_MIN_MET_JET_DPHI", "min_met_jet_dphi", -1.0)
 PY
 )"
 eval "${config_assignments}"
@@ -144,6 +160,10 @@ HT_JET_ID_MIN="${HT_JET_ID_MIN:-${CFG_HT_JET_ID_MIN}}"
 MIN_DPHI="${MIN_DPHI:-${CFG_MIN_DPHI}}"
 LUMI_MASK="${LUMI_MASK:-${CFG_LUMI_MASK}}"
 
+MIN_EVENT_HT="${MIN_EVENT_HT:-${CFG_MIN_EVENT_HT}}"
+MIN_MET_PT="${MIN_MET_PT:-${CFG_MIN_MET_PT}}"
+MIN_MUON_MET_MT="${MIN_MUON_MET_MT:-${CFG_MIN_MUON_MET_MT}}"
+MIN_MET_JET_DPHI="${MIN_MET_JET_DPHI:-${CFG_MIN_MET_JET_DPHI}}"
 if [[ "${LEPTON_MODE}" != "muon" ]]; then
   echo "ERROR: only --lepton-mode muon is currently supported"
   exit 2
@@ -223,7 +243,7 @@ PY
   ROOT_LUMI_MASK="$(root_escape "${LUMI_MASK_RANGES}")"
 fi
 
-root -l -b -q "PhysicsAnalysisTreeProducer.C+(\"${ROOT_INPUT}\",\"${ROOT_OUTPUT}\",\"${ROOT_SAMPLE}\",${IS_DATA},${MAX_EVENTS},${JET_PT_MIN},${JET_ETA_MAX},\"${ROOT_LEPTON_MODE}\",${MUON_PT_MIN},${MUON_ETA_MAX},${MUON_ISO_MAX},${MIN_DPHI},\"${ROOT_ISO_BRANCH}\",\"${ROOT_LUMI_MASK}\",\"${ROOT_MUON_ID}\",${HT_JET_PT_MIN},${HT_JET_ETA_MAX},${HT_JET_ID_MIN})"
+root -l -b -q "PhysicsAnalysisTreeProducer.C+(\"${ROOT_INPUT}\",\"${ROOT_OUTPUT}\",\"${ROOT_SAMPLE}\",${IS_DATA},${MAX_EVENTS},${JET_PT_MIN},${JET_ETA_MAX},\"${ROOT_LEPTON_MODE}\",${MUON_PT_MIN},${MUON_ETA_MAX},${MUON_ISO_MAX},${MIN_DPHI},\"${ROOT_ISO_BRANCH}\",\"${ROOT_LUMI_MASK}\",\"${ROOT_MUON_ID}\",${HT_JET_PT_MIN},${HT_JET_ETA_MAX},${HT_JET_ID_MIN},${MIN_EVENT_HT},${MIN_MET_PT},${MIN_MUON_MET_MT},${MIN_MET_JET_DPHI})"
 
 echo
 echo "Done. Output file:"

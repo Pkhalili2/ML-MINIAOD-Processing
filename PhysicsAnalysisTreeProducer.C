@@ -219,8 +219,12 @@ void labelCutflow(TH1D& hist) {
   hist.GetXaxis()->SetBinLabel(4, "muon_pass");
   hist.GetXaxis()->SetBinLabel(5, "has_ak15");
   hist.GetXaxis()->SetBinLabel(6, "ak15_pt_eta");
-  hist.GetXaxis()->SetBinLabel(7, "dphi_pass");
-  hist.GetXaxis()->SetBinLabel(8, "selected");
+  hist.GetXaxis()->SetBinLabel(7, "muon_ak15_dphi");
+  hist.GetXaxis()->SetBinLabel(8, "ht4_pass");
+  hist.GetXaxis()->SetBinLabel(9, "met_pass");
+  hist.GetXaxis()->SetBinLabel(10, "mt_pass");
+  hist.GetXaxis()->SetBinLabel(11, "met_ak15_dphi");
+  hist.GetXaxis()->SetBinLabel(12, "selected");
 }
 
 }  // namespace
@@ -242,7 +246,11 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
                                 const char* muonIdArg = "none",
                                 double htJetPtMin = 30.0,
                                 double htJetEtaMax = 2.4,
-                                int htJetIdMin = 2) {
+                                int htJetIdMin = 2,
+                                double minEventHT = -1.0,
+                                double minMetPt = -1.0,
+                                double minMuonMetTransverseMass = -1.0,
+                                double minMetJetDeltaPhi = -1.0) {
   const std::string leptonMode = lower(trim(leptonModeArg ? leptonModeArg : "muon"));
   if (leptonMode != "muon") {
     std::cerr << "ERROR: PhysicsAnalysisTreeProducer currently supports only lepton_mode=muon; got '"
@@ -357,9 +365,9 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
   }
 
   TTree out("Events", "Muon-channel AK15 analysis tree");
-  TH1D cutflow("cutflow", "Muon-channel AK15 cutflow (raw events)", 8, 0.5, 8.5);
+  TH1D cutflow("cutflow", "Muon-channel AK15 cutflow (raw events)", 12, 0.5, 12.5);
   TH1D cutflowWeighted(
-      "cutflow_weighted", "Muon-channel AK15 cutflow (generator-weight sums)", 8, 0.5, 8.5);
+      "cutflow_weighted", "Muon-channel AK15 cutflow (generator-weight sums)", 12, 0.5, 12.5);
   labelCutflow(cutflow);
   labelCutflow(cutflowWeighted);
   cutflow.Sumw2();
@@ -396,6 +404,10 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
   Double_t metadataHtJetPtMin = htJetPtMin;
   Double_t metadataHtJetEtaMax = htJetEtaMax;
   Int_t metadataHtJetIdMin = htJetIdMin;
+  Double_t metadataMinEventHT = minEventHT;
+  Double_t metadataMinMetPt = minMetPt;
+  Double_t metadataMinMuonMetTransverseMass = minMuonMetTransverseMass;
+  Double_t metadataMinMetJetDeltaPhi = minMetJetDeltaPhi;
   std::string metadataMuonId = muonIdMode;
   std::string metadataMuonIsoBranch =
       lower(trim(muonIsoBranchArg ? muonIsoBranchArg : "auto"));
@@ -408,6 +420,11 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
   analysisMetadata.Branch("htJetPtMin", &metadataHtJetPtMin);
   analysisMetadata.Branch("htJetEtaMax", &metadataHtJetEtaMax);
   analysisMetadata.Branch("htJetIdMin", &metadataHtJetIdMin);
+  analysisMetadata.Branch("minEventHT", &metadataMinEventHT);
+  analysisMetadata.Branch("minMetPt", &metadataMinMetPt);
+  analysisMetadata.Branch(
+      "minMuonMetTransverseMass", &metadataMinMuonMetTransverseMass);
+  analysisMetadata.Branch("minMetJetDeltaPhi", &metadataMinMetJetDeltaPhi);
   analysisMetadata.Branch("muonId", &metadataMuonId);
   analysisMetadata.Branch("muonIsoBranch", &metadataMuonIsoBranch);
   analysisMetadata.Fill();
@@ -443,6 +460,7 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
   Float_t muonMetDeltaPhi = kMissing;
   Float_t muonMetTransverseMass = kMissing;
   Float_t selectedMuonPt = kMissing;
+  Float_t metJetDeltaPhi = kMissing;
   Float_t selectedMuonEta = kMissing;
   Float_t selectedMuonPhi = kMissing;
   Float_t selectedMuonIso = kMissing;
@@ -493,6 +511,7 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
   out.Branch("muonMetDeltaPhi", &muonMetDeltaPhi);
   out.Branch("muonMetTransverseMass", &muonMetTransverseMass);
   out.Branch("jet_pt", &jet_pt);
+  out.Branch("metJetDeltaPhi", &metJetDeltaPhi);
   out.Branch("jet_eta", &jet_eta);
   out.Branch("jet_phi", &jet_phi);
   out.Branch("jet_mass", &jet_mass);
@@ -657,11 +676,37 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
     muonJetDeltaPhi = std::abs(bestSignedDeltaPhi);
     muonJetDeltaR = deltaR(selectedMuonEta, selectedMuonPhi, jet_eta, jet_phi);
     hasGenWeight = genWeight ? 1 : 0;
+    metJetDeltaPhi = std::abs(deltaPhiSigned(outMetPhi, jet_phi));
     outGenWeight = genWeight ? **genWeight : 1.0;
 
-    out.Fill();
+    if (minEventHT >= 0.0 && eventHT4 <= minEventHT) {
+      continue;
+    }
     cutflow.Fill(8);
     cutflowWeighted.Fill(8, eventWeight);
+
+    if (minMetPt >= 0.0 && outMetPt <= minMetPt) {
+      continue;
+    }
+    cutflow.Fill(9);
+    cutflowWeighted.Fill(9, eventWeight);
+
+    if (minMuonMetTransverseMass >= 0.0 &&
+        muonMetTransverseMass <= minMuonMetTransverseMass) {
+      continue;
+    }
+    cutflow.Fill(10);
+    cutflowWeighted.Fill(10, eventWeight);
+
+    if (minMetJetDeltaPhi >= 0.0 && metJetDeltaPhi <= minMetJetDeltaPhi) {
+      continue;
+    }
+    cutflow.Fill(11);
+    cutflowWeighted.Fill(11, eventWeight);
+
+    out.Fill();
+    cutflow.Fill(12);
+    cutflowWeighted.Fill(12, eventWeight);
     ++selected;
     selectedSumGenWeights += eventWeight;
   }

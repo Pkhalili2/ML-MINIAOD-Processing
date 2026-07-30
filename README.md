@@ -184,6 +184,21 @@ data/MC plots. The default cumulative selection is:
 7. require \(|\Delta\phi(\mu,\mathrm{leading\ AK15})|>1.5\);
 8. write the selected event.
 
+The tighter selection in `config/analysis_muon_2018_final_selection.json`
+uses a tight muon with `pT > 55 GeV` and relative isolation below 0.15, then
+adds these cumulative requirements:
+
+1. reconstructed AK4 `HT > 200 GeV`, where HT is the scalar sum of `Jet_pt`
+   for jets with `pT > 30 GeV`, `abs(eta) < 3.0`, and `Jet_jetId >= 2`;
+2. `MET_pt > 30 GeV`;
+3. muon-MET transverse mass above 50 GeV;
+4. `abs(DeltaPhi(MET, leading AK15)) > 1.0`.
+
+The existing leading-AK15 kinematic stage already requires the global leading
+AK15 jet to have `pT > 200 GeV`. This also guarantees that the scalar sum of
+AK15-jet transverse momenta exceeds 200 GeV, without requiring nonleading
+AK15 candidates in leading-only NanoAOD.
+
 The defaults are in `config/analysis_muon_2018.json` and can be overridden on
 the command line:
 
