@@ -24,6 +24,7 @@ condor/logs/
 condor/outputs/
 condor/test_outputs/
 condor/package.tgz
+condor/.empty_transfer_input
 job_report_*.txt
 root_outputs_*.tgz
 
