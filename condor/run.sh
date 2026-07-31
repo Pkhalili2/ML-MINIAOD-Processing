@@ -518,6 +518,7 @@ if [[ "${MODE}" == "phase1" || "${MODE}" == "both" ]]; then
   cms_inputs="$(
     grep -v '^[[:space:]]*#' "${INPUT_LIST_PATH}" |
     grep -v '^[[:space:]]*$' |
+    sed 's#^/#file:/#' |
     paste -sd, -
   )"
 
