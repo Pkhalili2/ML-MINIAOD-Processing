@@ -168,11 +168,11 @@ if [[ "${USE_SINGULARITY:-1}" == "1" && -z "${STARTED_SINGULARITY:-}" ]]; then
     physical_pwd="$(pwd -P)"
     export _CONDOR_SCRATCH_DIR="${physical_pwd}"
     script_path="${physical_pwd}/$(basename "$0")"
-    if [[ ! -x "${script_path}" && -x "${physical_pwd}/condor/$(basename "$0")" ]]; then
+    if [[ ! -f "${script_path}" && -f "${physical_pwd}/condor/$(basename "$0")" ]]; then
       script_path="${physical_pwd}/condor/$(basename "$0")"
     fi
-    if [[ ! -x "${script_path}" ]]; then
-      echo "ERROR: could not find executable wrapper inside ${JOBDIR} (physical cwd: ${physical_pwd})"
+    if [[ ! -f "${script_path}" ]]; then
+      echo "ERROR: could not find wrapper inside ${JOBDIR} (physical cwd: ${physical_pwd})"
       find "${physical_pwd}" -maxdepth 2 -type f | sort
       exit 2
     fi
