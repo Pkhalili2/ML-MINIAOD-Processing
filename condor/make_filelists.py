@@ -245,7 +245,10 @@ def main():
             with open(chunk_path, "w", encoding="utf-8") as handle:
                 handle.write("\n".join(chunk))
                 handle.write("\n")
-            rel_chunk = os.path.relpath(chunk_path, root)
+            try:
+                rel_chunk = str(chunk_path.relative_to(root))
+            except ValueError:
+                rel_chunk = str(chunk_path)
             row = [
                 args.tag,
                 chunk_id,

@@ -38,6 +38,7 @@ HDFS_XROOTD_PREFIX="${AK15_HDFS_XROOTD_PREFIX:-root://cmsxrootd.hep.wisc.edu//}"
 PREFETCH_XROOTD="0"
 DIRECT_OUTPUT_FILES="0"
 LOG_DIR="condor/.logs"
+GENERATED_DIR="condor/.generated"
 STAGE_INPUT_FILES="auto"
 DRY_RUN="0"
 NO_SUBMIT="0"
@@ -78,6 +79,7 @@ Options:
   --prefetch-xrootd         Copy xrootd inputs to worker scratch before CMSSW starts.
   --direct-output-files 0|1 Copy compact ROOT outputs directly to OUTPUT_DIR.
   --log-dir DIR              Condor event/stdout/stderr directory. Default: condor/.logs
+  --generated-dir DIR        Generated chunk lists and job tables. Default: condor/.generated
   --stage-input-files 0|1|auto
                               Transfer local phase-1 ROOT files to the worker.
                               Default: auto for /nfs_scratch inputs.
@@ -123,6 +125,7 @@ while [[ $# -gt 0 ]]; do
     --prefetch-xrootd) PREFETCH_XROOTD="1"; shift ;;
     --direct-output-files) DIRECT_OUTPUT_FILES="$2"; shift 2 ;;
     --log-dir) LOG_DIR="$2"; shift 2 ;;
+    --generated-dir) GENERATED_DIR="$2"; shift 2 ;;
     --stage-input-files) STAGE_INPUT_FILES="$2"; shift 2 ;;
     --dry-run) DRY_RUN="1"; shift ;;
     --no-submit) NO_SUBMIT="1"; shift ;;
@@ -235,6 +238,7 @@ make_args=(
   --scram-arch "${SCRAM_ARCH}"
   --input-prefix "${INPUT_PREFIX}"
   --hdfs-xrootd-prefix "${HDFS_XROOTD_PREFIX}"
+  --generated-dir "${GENERATED_DIR}"
 )
 
 if [[ "${LIMIT_FILES}" != "0" ]]; then
@@ -253,7 +257,7 @@ fi
 python3 condor/make_filelists.py "${make_args[@]}"
 bash condor/package_project.sh
 
-JOB_TABLE="condor/.generated/${TAG}/job_table.txt"
+JOB_TABLE="${GENERATED_DIR}/${TAG}/job_table.txt"
 if [[ ! -s "${JOB_TABLE}" ]]; then
   echo "ERROR: generated job table is empty: ${JOB_TABLE}"
   exit 3
@@ -271,7 +275,7 @@ if [[ "${STAGE_INPUT_FILES}" != "0" && "${STAGE_INPUT_FILES}" != "1" ]]; then
 fi
 
 touch condor/.empty_transfer_input
-JOB_TABLE_WITH_TRANSFERS="condor/.generated/${TAG}/job_table_with_transfers.txt"
+JOB_TABLE_WITH_TRANSFERS="${GENERATED_DIR}/${TAG}/job_table_with_transfers.txt"
 while IFS= read -r row; do
   [[ -n "${row}" ]] || continue
   input_list="$(awk '{print $3}' <<< "${row}")"
@@ -371,8 +375,8 @@ else
 fi
 
 if [[ "${DRY_RUN}" == "1" ]]; then
-  condor_submit "${submit_args[@]}" -dry-run "condor/.generated/${TAG}/analysis_dryrun.ad" condor/submit_analysis.sub
-  echo "Wrote dry-run ClassAd: condor/.generated/${TAG}/analysis_dryrun.ad"
+  condor_submit "${submit_args[@]}" -dry-run "${GENERATED_DIR}/${TAG}/analysis_dryrun.ad" condor/submit_analysis.sub
+  echo "Wrote dry-run ClassAd: ${GENERATED_DIR}/${TAG}/analysis_dryrun.ad"
   exit 0
 fi
 

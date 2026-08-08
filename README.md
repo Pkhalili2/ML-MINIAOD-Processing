@@ -312,6 +312,11 @@ written directly to that URL and Condor returns a small audit tarball.
 
 The compact analysis submitter can read HDFS files through xrootd and prefetch
 each source file with the worker host before entering the EL7 CMSSW runtime.
+Selection values are read from the chosen JSON configuration unless the same
+setting is explicitly overridden on the command line. For one-file-per-job
+campaigns on a quota-limited NFS area, place generated chunk lists in AFS with
+`--generated-dir /afs/...`; this changes only submit metadata, not physics
+input or output locations.
 
 ```bash
 bash condor/submit_analysis_all.sh \
