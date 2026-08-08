@@ -161,6 +161,7 @@ DEFAULT_PLOTS = [
 CUTFLOW_STAGES = [
     "processed",
     "certified_lumi",
+    "hlt_pass",
     "has_muon",
     "muon_pass",
     "has_ak15",
@@ -176,6 +177,7 @@ CUTFLOW_STAGES = [
 CUTFLOW_DISPLAY = {
     "processed": "Processed",
     "certified_lumi": "Golden JSON",
+    "hlt_pass": "HLT Mu50",
     "has_muon": "Has muon",
     "muon_pass": "Muon selection",
     "has_ak15": "Has AK15",
@@ -183,7 +185,7 @@ CUTFLOW_DISPLAY = {
     "muon_ak15_dphi": "#Delta#phi(#mu, AK15) > 1.5",
     "ht4_pass": "H_{T}^{AK4} > 200",
     "met_pass": "p_{T}^{miss} > 30",
-    "mt_pass": "m_{T} > 50",
+    "mt_pass": "m_{T} > 50 / ABCD",
     "met_ak15_dphi": "#Delta#phi(MET, AK15) > 1.0",
     "selected": "Selected",
 }
@@ -399,8 +401,12 @@ def canonical_cutflow(labels, values):
     mapped = dict(zip(labels, values))
     if "certified_lumi" not in mapped and "processed" in mapped:
         mapped["certified_lumi"] = mapped["processed"]
+    if "hlt_pass" not in mapped and "certified_lumi" in mapped:
+        mapped["hlt_pass"] = mapped["certified_lumi"]
     if "muon_ak15_dphi" not in mapped and "dphi_pass" in mapped:
         mapped["muon_ak15_dphi"] = mapped["dphi_pass"]
+    if "mt_pass" not in mapped and "abcd_partition" in mapped:
+        mapped["mt_pass"] = mapped["abcd_partition"]
     return [float(mapped.get(stage, 0.0)) for stage in CUTFLOW_STAGES]
 
 
@@ -556,7 +562,19 @@ def group_backgrounds(backgrounds, name):
 
 
 def draw_stack_plot(
-    ROOT, key, plot_title, x_title, data_hist, backgrounds, signals, output_dir, lumi_pb, note, log_y
+    ROOT,
+    key,
+    plot_title,
+    x_title,
+    data_hist,
+    backgrounds,
+    signals,
+    output_dir,
+    lumi_pb,
+    note,
+    log_y,
+    uncertainty_label="MC stat. unc.",
+    ratio_title="Data/MC",
 ):
     suffix = "" if log_y else "_linear"
     is_cutflow = key.startswith("cutflow")
@@ -652,7 +670,7 @@ def draw_stack_plot(
         uncertainty.SetMarkerSize(0)
         uncertainty.SetLineColor(ROOT.kGray + 2)
         uncertainty.Draw("E2 SAME")
-        legend.AddEntry(uncertainty, "MC stat. unc.", "f")
+        legend.AddEntry(uncertainty, uncertainty_label, "f")
 
     for row, hist in signals:
         hist.Draw("HIST SAME")
@@ -696,7 +714,7 @@ def draw_stack_plot(
         ratio.SetTitle("")
         ratio.SetMarkerStyle(20)
         ratio.SetMarkerSize(0.75)
-        ratio.GetYaxis().SetTitle("Data/MC")
+        ratio.GetYaxis().SetTitle(ratio_title)
         largest = max([2.0] + [value + error for value, error in ratio_points])
         positive = [value for value, _ in ratio_points if value > 0.0]
         if largest > 5.0:

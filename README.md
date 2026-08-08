@@ -199,6 +199,41 @@ AK15 jet to have `pT > 200 GeV`. This also guarantees that the scalar sum of
 AK15-jet transverse momenta exceeds 200 GeV, without requiring nonleading
 AK15 candidates in leading-only NanoAOD.
 
+### Trigger and ABCD QCD Estimate
+
+`config/analysis_muon_2018_trigger_abcd.json` extends the final selection with
+`HLT_Mu50` and writes four control regions defined by muon relative isolation
+and muon-MET transverse mass:
+
+| Region | Muon relative isolation | Transverse mass |
+| --- | --- | --- |
+| A | `< 0.15` | `> 50 GeV` |
+| B | `< 0.15` | `<= 50 GeV` |
+| C | `>= 0.15` and `< 0.5` | `> 50 GeV` |
+| D | `>= 0.15` and `< 0.5` | `<= 50 GeV` |
+
+All four regions use the same tight-muon, global-leading-AK15, AK4-HT, MET,
+and angular requirements. `Events` contains region A, while `ABCDEvents`
+contains candidates from all four regions. The ROOT product also contains raw
+and generator-weighted `abcd_yields` histograms.
+
+The data-driven QCD prediction subtracts every non-QCD simulated background
+from data in each control region. Its region-A normalization is
+`QCD_A = QCD_B * QCD_C / QCD_D`. The region-D residual supplies the QCD shape
+for observables that do not define the ABCD plane. The plotter records the
+subtraction, propagated statistical uncertainty, negative-bin handling, and a
+QCD-simulation closure test:
+
+```bash
+python scripts/make_abcd_plots.py \
+  --metadata config/samples_trigger_abcd_2018.csv \
+  --output-dir plots/trigger_abcd \
+  --lumi-pb 37997.277757686
+```
+
+Muon isolation and transverse mass are rendered as a dedicated two-dimensional
+ABCD control plane rather than transferred from region D into region A.
+
 The defaults are in `config/analysis_muon_2018.json` and can be overridden on
 the command line:
 
@@ -450,7 +485,8 @@ For leading-only Stage-1 Nano outputs, run:
 python scripts/validate_leading_ak15_nano.py \
   root://cmsxrootd.hep.wisc.edu//store/user/$USER/AK15/nano_sample.root \
   --expected-events <source-file-events> \
-  --check-events 1000
+  --check-events 1000 \
+  --require-branch HLT_Mu50
 ```
 
 This verifies the event count, ordinary NanoAOD and muon branches, at most one

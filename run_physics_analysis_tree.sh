@@ -27,6 +27,11 @@ Options:
   --min-met-pt X             Minimum missing transverse momentum; negative disables
   --min-muon-met-mt X        Minimum muon-MET transverse mass; negative disables
   --min-met-jet-dphi X       Minimum abs DeltaPhi(MET, leading AK15); negative disables
+  --required-hlt NAME        Required NanoAOD HLT branch; empty disables
+  --abcd-mode 0|1            Write ABCD candidates and retain region A in Events
+  --abcd-iso-pass-max X      Tight-isolation upper boundary
+  --abcd-iso-fail-max X      Isolation-sideband upper boundary
+  --abcd-mt-boundary X       Boundary between high- and low-mT regions
   --ht-jet-id-min N          Minimum NanoAOD Jet_jetId value for HT
   --min-dphi X               Minimum abs DeltaPhi(jet, muon). Default from config
   --lumi-mask PATH           CMS golden JSON or a run/lumi range text file
@@ -62,6 +67,11 @@ MIN_EVENT_HT=""
 MIN_MET_PT=""
 MIN_MUON_MET_MT=""
 MIN_MET_JET_DPHI=""
+REQUIRED_HLT=""
+ABCD_MODE=""
+ABCD_ISO_PASS_MAX=""
+ABCD_ISO_FAIL_MAX=""
+ABCD_MT_BOUNDARY=""
 LUMI_MASK=""
 
 while [[ $# -gt 0 ]]; do
@@ -86,6 +96,11 @@ while [[ $# -gt 0 ]]; do
     --min-met-pt) MIN_MET_PT="$2"; shift 2 ;;
     --min-muon-met-mt) MIN_MUON_MET_MT="$2"; shift 2 ;;
     --min-met-jet-dphi) MIN_MET_JET_DPHI="$2"; shift 2 ;;
+    --required-hlt) REQUIRED_HLT="$2"; shift 2 ;;
+    --abcd-mode) ABCD_MODE="$2"; shift 2 ;;
+    --abcd-iso-pass-max) ABCD_ISO_PASS_MAX="$2"; shift 2 ;;
+    --abcd-iso-fail-max) ABCD_ISO_FAIL_MAX="$2"; shift 2 ;;
+    --abcd-mt-boundary) ABCD_MT_BOUNDARY="$2"; shift 2 ;;
     --lumi-mask) LUMI_MASK="$2"; shift 2 ;;
     --help|-h) usage; exit 0 ;;
     *)
@@ -120,8 +135,8 @@ def emit(shell_name, key, default):
     value = cfg.get(key, default)
     if isinstance(value, (dict, list)):
         raise SystemExit("Config key %s must be a scalar value" % key)
-    if key in ("lepton_mode", "muon_iso_branch", "muon_id", "lumi_mask"):
-        if not re.match(r"^[A-Za-z0-9_./:-]+$", str(value)):
+    if key in ("lepton_mode", "muon_iso_branch", "muon_id", "lumi_mask", "required_hlt"):
+        if str(value) and not re.match(r"^[A-Za-z0-9_./:-]+$", str(value)):
             raise SystemExit("Config key %s contains unsafe characters: %r" % (key, value))
     print("%s=%s" % (shell_name, quote(value)))
 
@@ -142,6 +157,11 @@ emit("CFG_MIN_EVENT_HT", "min_event_ht", -1.0)
 emit("CFG_MIN_MET_PT", "min_met_pt", -1.0)
 emit("CFG_MIN_MUON_MET_MT", "min_muon_met_transverse_mass", -1.0)
 emit("CFG_MIN_MET_JET_DPHI", "min_met_jet_dphi", -1.0)
+emit("CFG_REQUIRED_HLT", "required_hlt", "")
+emit("CFG_ABCD_MODE", "abcd_mode", 0)
+emit("CFG_ABCD_ISO_PASS_MAX", "abcd_iso_pass_max", 0.15)
+emit("CFG_ABCD_ISO_FAIL_MAX", "abcd_iso_fail_max", 0.5)
+emit("CFG_ABCD_MT_BOUNDARY", "abcd_mt_boundary", 50.0)
 PY
 )"
 eval "${config_assignments}"
@@ -164,6 +184,11 @@ MIN_EVENT_HT="${MIN_EVENT_HT:-${CFG_MIN_EVENT_HT}}"
 MIN_MET_PT="${MIN_MET_PT:-${CFG_MIN_MET_PT}}"
 MIN_MUON_MET_MT="${MIN_MUON_MET_MT:-${CFG_MIN_MUON_MET_MT}}"
 MIN_MET_JET_DPHI="${MIN_MET_JET_DPHI:-${CFG_MIN_MET_JET_DPHI}}"
+REQUIRED_HLT="${REQUIRED_HLT:-${CFG_REQUIRED_HLT}}"
+ABCD_MODE="${ABCD_MODE:-${CFG_ABCD_MODE}}"
+ABCD_ISO_PASS_MAX="${ABCD_ISO_PASS_MAX:-${CFG_ABCD_ISO_PASS_MAX}}"
+ABCD_ISO_FAIL_MAX="${ABCD_ISO_FAIL_MAX:-${CFG_ABCD_ISO_FAIL_MAX}}"
+ABCD_MT_BOUNDARY="${ABCD_MT_BOUNDARY:-${CFG_ABCD_MT_BOUNDARY}}"
 if [[ "${LEPTON_MODE}" != "muon" ]]; then
   echo "ERROR: only --lepton-mode muon is currently supported"
   exit 2
@@ -213,6 +238,7 @@ ROOT_SAMPLE="$(root_escape "${SAMPLE_LABEL}")"
 ROOT_LEPTON_MODE="$(root_escape "${LEPTON_MODE}")"
 ROOT_ISO_BRANCH="$(root_escape "${MUON_ISO_BRANCH}")"
 ROOT_MUON_ID="$(root_escape "${MUON_ID}")"
+ROOT_REQUIRED_HLT="$(root_escape "${REQUIRED_HLT}")"
 ROOT_LUMI_MASK=""
 
 if [[ "${IS_DATA}" == "1" && -n "${LUMI_MASK}" ]]; then
@@ -243,7 +269,7 @@ PY
   ROOT_LUMI_MASK="$(root_escape "${LUMI_MASK_RANGES}")"
 fi
 
-root -l -b -q "PhysicsAnalysisTreeProducer.C+(\"${ROOT_INPUT}\",\"${ROOT_OUTPUT}\",\"${ROOT_SAMPLE}\",${IS_DATA},${MAX_EVENTS},${JET_PT_MIN},${JET_ETA_MAX},\"${ROOT_LEPTON_MODE}\",${MUON_PT_MIN},${MUON_ETA_MAX},${MUON_ISO_MAX},${MIN_DPHI},\"${ROOT_ISO_BRANCH}\",\"${ROOT_LUMI_MASK}\",\"${ROOT_MUON_ID}\",${HT_JET_PT_MIN},${HT_JET_ETA_MAX},${HT_JET_ID_MIN},${MIN_EVENT_HT},${MIN_MET_PT},${MIN_MUON_MET_MT},${MIN_MET_JET_DPHI})"
+root -l -b -q "PhysicsAnalysisTreeProducer.C+(\"${ROOT_INPUT}\",\"${ROOT_OUTPUT}\",\"${ROOT_SAMPLE}\",${IS_DATA},${MAX_EVENTS},${JET_PT_MIN},${JET_ETA_MAX},\"${ROOT_LEPTON_MODE}\",${MUON_PT_MIN},${MUON_ETA_MAX},${MUON_ISO_MAX},${MIN_DPHI},\"${ROOT_ISO_BRANCH}\",\"${ROOT_LUMI_MASK}\",\"${ROOT_MUON_ID}\",${HT_JET_PT_MIN},${HT_JET_ETA_MAX},${HT_JET_ID_MIN},${MIN_EVENT_HT},${MIN_MET_PT},${MIN_MUON_MET_MT},${MIN_MET_JET_DPHI},\"${ROOT_REQUIRED_HLT}\",${ABCD_MODE},${ABCD_ISO_PASS_MAX},${ABCD_ISO_FAIL_MAX},${ABCD_MT_BOUNDARY})"
 
 echo
 echo "Done. Output file:"

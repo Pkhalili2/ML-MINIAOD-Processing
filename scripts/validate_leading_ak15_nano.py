@@ -34,6 +34,7 @@ def main():
     parser.add_argument("--expected-events", type=int)
     parser.add_argument("--check-events", type=int, default=1000)
     parser.add_argument("--require-original-ht", action="store_true")
+    parser.add_argument("--require-branch", action="append", default=[])
     args = parser.parse_args()
 
     source = ROOT.TFile.Open(args.input)
@@ -67,6 +68,11 @@ def main():
         metadata.add("SuperFatJetAK15_originalAK15HT")
     require(ordinary.issubset(branches), "ordinary NanoAOD or muon branches are missing")
     require(metadata.issubset(branches), "leading-only AK15 metadata is incomplete")
+    require(
+        set(args.require_branch).issubset(branches),
+        "required branches are missing: %s"
+        % ", ".join(sorted(set(args.require_branch) - branches)),
+    )
 
     enabled = ordinary | metadata
     if "SuperFatJetAK15GenCand_jetIdx" in branches:
@@ -137,6 +143,8 @@ def main():
     print("pf_candidates=%d" % pf_candidates)
     print("gen_candidates=%d" % gen_candidates)
     print("leading_only_metadata_valid=1")
+    if args.require_branch:
+        print("required_branches_present=%s" % ",".join(args.require_branch))
 
 
 if __name__ == "__main__":

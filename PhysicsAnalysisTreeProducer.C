@@ -212,19 +212,27 @@ bool passesLumiMask(const LumiMask& mask, UInt_t run, UInt_t lumi) {
   return false;
 }
 
-void labelCutflow(TH1D& hist) {
+void labelCutflow(TH1D& hist, bool abcdMode) {
   hist.GetXaxis()->SetBinLabel(1, "processed");
   hist.GetXaxis()->SetBinLabel(2, "certified_lumi");
-  hist.GetXaxis()->SetBinLabel(3, "has_muon");
-  hist.GetXaxis()->SetBinLabel(4, "muon_pass");
-  hist.GetXaxis()->SetBinLabel(5, "has_ak15");
-  hist.GetXaxis()->SetBinLabel(6, "ak15_pt_eta");
-  hist.GetXaxis()->SetBinLabel(7, "muon_ak15_dphi");
-  hist.GetXaxis()->SetBinLabel(8, "ht4_pass");
-  hist.GetXaxis()->SetBinLabel(9, "met_pass");
-  hist.GetXaxis()->SetBinLabel(10, "mt_pass");
-  hist.GetXaxis()->SetBinLabel(11, "met_ak15_dphi");
-  hist.GetXaxis()->SetBinLabel(12, "selected");
+  hist.GetXaxis()->SetBinLabel(3, "hlt_pass");
+  hist.GetXaxis()->SetBinLabel(4, "has_muon");
+  hist.GetXaxis()->SetBinLabel(5, "muon_pass");
+  hist.GetXaxis()->SetBinLabel(6, "has_ak15");
+  hist.GetXaxis()->SetBinLabel(7, "ak15_pt_eta");
+  hist.GetXaxis()->SetBinLabel(8, "muon_ak15_dphi");
+  hist.GetXaxis()->SetBinLabel(9, "ht4_pass");
+  hist.GetXaxis()->SetBinLabel(10, "met_pass");
+  hist.GetXaxis()->SetBinLabel(11, abcdMode ? "abcd_partition" : "mt_pass");
+  hist.GetXaxis()->SetBinLabel(12, "met_ak15_dphi");
+  hist.GetXaxis()->SetBinLabel(13, "selected");
+}
+
+void labelAbcd(TH1D& hist) {
+  hist.GetXaxis()->SetBinLabel(1, "A_iso_pass_mt_high");
+  hist.GetXaxis()->SetBinLabel(2, "B_iso_pass_mt_low");
+  hist.GetXaxis()->SetBinLabel(3, "C_iso_fail_mt_high");
+  hist.GetXaxis()->SetBinLabel(4, "D_iso_fail_mt_low");
 }
 
 }  // namespace
@@ -250,7 +258,12 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
                                 double minEventHT = -1.0,
                                 double minMetPt = -1.0,
                                 double minMuonMetTransverseMass = -1.0,
-                                double minMetJetDeltaPhi = -1.0) {
+                                double minMetJetDeltaPhi = -1.0,
+                                const char* requiredHltBranchArg = "",
+                                int abcdModeArg = 0,
+                                double abcdIsoPassMax = 0.15,
+                                double abcdIsoFailMax = 0.5,
+                                double abcdMtBoundary = 50.0) {
   const std::string leptonMode = lower(trim(leptonModeArg ? leptonModeArg : "muon"));
   if (leptonMode != "muon") {
     std::cerr << "ERROR: PhysicsAnalysisTreeProducer currently supports only lepton_mode=muon; got '"
@@ -258,9 +271,18 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
     return 2;
   }
   const std::string muonIdMode = lower(trim(muonIdArg ? muonIdArg : "none"));
+  const std::string requiredHltBranch =
+      trim(requiredHltBranchArg ? requiredHltBranchArg : "");
+  const bool abcdMode = abcdModeArg != 0;
   if (muonIdMode != "none" && muonIdMode != "medium" && muonIdMode != "tight") {
     std::cerr << "ERROR: muon_id must be none, medium, or tight; got '"
               << muonIdMode << "'" << std::endl;
+    return 2;
+  }
+  if (abcdMode &&
+      (abcdIsoPassMax <= 0.0 || abcdIsoFailMax <= abcdIsoPassMax || abcdMtBoundary < 0.0)) {
+    std::cerr << "ERROR: invalid ABCD boundaries: require 0 < iso pass < iso fail and mT >= 0"
+              << std::endl;
     return 2;
   }
 
@@ -345,6 +367,14 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
   auto jetOriginalHT =
       optionalArray<Float_t>(reader, tree, "SuperFatJetAK15_originalAK15HT");
   auto genWeight = optionalValue<Float_t>(reader, tree, "genWeight");
+  std::unique_ptr<TTreeReaderValue<Bool_t>> requiredHlt;
+  if (!requiredHltBranch.empty()) {
+    if (!hasBranch(tree, requiredHltBranch.c_str())) {
+      std::cerr << "ERROR: required HLT branch is missing: " << requiredHltBranch << std::endl;
+      return 4;
+    }
+    requiredHlt.reset(new TTreeReaderValue<Bool_t>(reader, requiredHltBranch.c_str()));
+  }
   if (!isData && !genWeight) {
     std::cerr << "ERROR: MC input is missing required genWeight branch" << std::endl;
     return 4;
@@ -365,13 +395,20 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
   }
 
   TTree out("Events", "Muon-channel AK15 analysis tree");
-  TH1D cutflow("cutflow", "Muon-channel AK15 cutflow (raw events)", 12, 0.5, 12.5);
+  TH1D cutflow("cutflow", "Muon-channel AK15 cutflow (raw events)", 13, 0.5, 13.5);
   TH1D cutflowWeighted(
-      "cutflow_weighted", "Muon-channel AK15 cutflow (generator-weight sums)", 12, 0.5, 12.5);
-  labelCutflow(cutflow);
-  labelCutflow(cutflowWeighted);
+      "cutflow_weighted", "Muon-channel AK15 cutflow (generator-weight sums)", 13, 0.5, 13.5);
+  labelCutflow(cutflow, abcdMode);
+  labelCutflow(cutflowWeighted, abcdMode);
   cutflow.Sumw2();
   cutflowWeighted.Sumw2();
+  TH1D abcdYields("abcd_yields", "ABCD region raw events", 4, 0.5, 4.5);
+  TH1D abcdYieldsWeighted(
+      "abcd_yields_weighted", "ABCD region generator-weight sums", 4, 0.5, 4.5);
+  labelAbcd(abcdYields);
+  labelAbcd(abcdYieldsWeighted);
+  abcdYields.Sumw2();
+  abcdYieldsWeighted.Sumw2();
   TH1D ak4JetEtaPreselection(
       "ak4_jet_eta_preselection",
       "AK4 jet pseudorapidity before eta acceptance;AK4 jet #eta;sum of event weights",
@@ -408,7 +445,12 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
   Double_t metadataMinMetPt = minMetPt;
   Double_t metadataMinMuonMetTransverseMass = minMuonMetTransverseMass;
   Double_t metadataMinMetJetDeltaPhi = minMetJetDeltaPhi;
+  Int_t metadataAbcdMode = abcdMode ? 1 : 0;
+  Double_t metadataAbcdIsoPassMax = abcdIsoPassMax;
+  Double_t metadataAbcdIsoFailMax = abcdIsoFailMax;
+  Double_t metadataAbcdMtBoundary = abcdMtBoundary;
   std::string metadataMuonId = muonIdMode;
+  std::string metadataRequiredHlt = requiredHltBranch;
   std::string metadataMuonIsoBranch =
       lower(trim(muonIsoBranchArg ? muonIsoBranchArg : "auto"));
   analysisMetadata.Branch("jetPtMin", &metadataJetPtMin);
@@ -425,6 +467,11 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
   analysisMetadata.Branch(
       "minMuonMetTransverseMass", &metadataMinMuonMetTransverseMass);
   analysisMetadata.Branch("minMetJetDeltaPhi", &metadataMinMetJetDeltaPhi);
+  analysisMetadata.Branch("requiredHlt", &metadataRequiredHlt);
+  analysisMetadata.Branch("abcdMode", &metadataAbcdMode);
+  analysisMetadata.Branch("abcdIsoPassMax", &metadataAbcdIsoPassMax);
+  analysisMetadata.Branch("abcdIsoFailMax", &metadataAbcdIsoFailMax);
+  analysisMetadata.Branch("abcdMtBoundary", &metadataAbcdMtBoundary);
   analysisMetadata.Branch("muonId", &metadataMuonId);
   analysisMetadata.Branch("muonIsoBranch", &metadataMuonIsoBranch);
   analysisMetadata.Fill();
@@ -477,6 +524,7 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
   Float_t muonJetSignedDeltaPhi = kMissing;
   Float_t outGenWeight = 1.0;
   Int_t hasGenWeight = genWeight ? 1 : 0;
+  Int_t abcdRegion = 0;
 
   out.Branch("run", &outRun);
   out.Branch("luminosityBlock", &outLuminosityBlock);
@@ -520,6 +568,14 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
   out.Branch("muonJetSignedDeltaPhi", &muonJetSignedDeltaPhi);
   out.Branch("genWeight", &outGenWeight);
   out.Branch("hasGenWeight", &hasGenWeight);
+  out.Branch("abcdRegion", &abcdRegion);
+
+  TTree* abcdEvents = nullptr;
+  if (abcdMode) {
+    abcdEvents = out.CloneTree(0);
+    abcdEvents->SetName("ABCDEvents");
+    abcdEvents->SetTitle("Muon-channel AK15 ABCD candidate tree");
+  }
 
   Long64_t processed = 0;
   Long64_t selected = 0;
@@ -548,13 +604,19 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
       certifiedLumis.insert(std::make_pair(*run, *luminosityBlock));
     }
 
+    if (requiredHlt && !**requiredHlt) {
+      continue;
+    }
+    cutflow.Fill(3);
+    cutflowWeighted.Fill(3, eventWeight);
+
     nInputMuon = static_cast<Int_t>(*nMuon);
     nInputAK15 = (jetOriginalMultiplicity && *nAK15 > 0)
                      ? (*jetOriginalMultiplicity)[0]
                      : static_cast<Int_t>(*nAK15);
     if (*nMuon > 0) {
-      cutflow.Fill(3);
-      cutflowWeighted.Fill(3, eventWeight);
+      cutflow.Fill(4);
+      cutflowWeighted.Fill(4, eventWeight);
     }
     int bestMuonIdx = -1;
     double bestMuonPt = -1.0;
@@ -568,7 +630,7 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
                                      i);
       if (muonPt[i] <= muonPtMin) continue;
       if (std::abs(muonEta[i]) >= muonEtaMax) continue;
-      if (iso >= muonIsoMax) continue;
+      if (iso >= (abcdMode ? abcdIsoFailMax : muonIsoMax)) continue;
       if (!passesMuonId(muonIdMode, muonMediumId, muonTightId, i)) continue;
       if (muonPt[i] > bestMuonPt) {
         bestMuonPt = muonPt[i];
@@ -580,14 +642,14 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
     if (bestMuonIdx < 0) {
       continue;
     }
-    cutflow.Fill(4);
-    cutflowWeighted.Fill(4, eventWeight);
+    cutflow.Fill(5);
+    cutflowWeighted.Fill(5, eventWeight);
 
     if (*nAK15 == 0) {
       continue;
     }
-    cutflow.Fill(5);
-    cutflowWeighted.Fill(5, eventWeight);
+    cutflow.Fill(6);
+    cutflowWeighted.Fill(6, eventWeight);
 
     int bestJetIdx = -1;
     for (UInt_t j = 0; j < *nAK15; ++j) {
@@ -600,16 +662,16 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
         std::abs(ak15Eta[bestJetIdx]) >= jetEtaMax) {
       continue;
     }
-    cutflow.Fill(6);
-    cutflowWeighted.Fill(6, eventWeight);
+    cutflow.Fill(7);
+    cutflowWeighted.Fill(7, eventWeight);
 
     const double bestSignedDeltaPhi =
         deltaPhiSigned(ak15Phi[bestJetIdx], muonPhi[bestMuonIdx]);
     if (std::abs(bestSignedDeltaPhi) <= minDeltaPhi) {
       continue;
     }
-    cutflow.Fill(7);
-    cutflowWeighted.Fill(7, eventWeight);
+    cutflow.Fill(8);
+    cutflowWeighted.Fill(8, eventWeight);
     for (UInt_t j = 0; j < *nRecoJet; ++j) {
       if (recoJetPt[j] <= htJetPtMin) continue;
       if (recoJetId[j] < htJetIdMin) continue;
@@ -682,31 +744,53 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
     if (minEventHT >= 0.0 && eventHT4 <= minEventHT) {
       continue;
     }
-    cutflow.Fill(8);
-    cutflowWeighted.Fill(8, eventWeight);
-
-    if (minMetPt >= 0.0 && outMetPt <= minMetPt) {
-      continue;
-    }
     cutflow.Fill(9);
     cutflowWeighted.Fill(9, eventWeight);
 
-    if (minMuonMetTransverseMass >= 0.0 &&
-        muonMetTransverseMass <= minMuonMetTransverseMass) {
+    if (minMetPt >= 0.0 && outMetPt <= minMetPt) {
       continue;
     }
     cutflow.Fill(10);
     cutflowWeighted.Fill(10, eventWeight);
 
-    if (minMetJetDeltaPhi >= 0.0 && metJetDeltaPhi <= minMetJetDeltaPhi) {
+    if (!abcdMode && minMuonMetTransverseMass >= 0.0 &&
+        muonMetTransverseMass <= minMuonMetTransverseMass) {
       continue;
     }
     cutflow.Fill(11);
     cutflowWeighted.Fill(11, eventWeight);
 
-    out.Fill();
+    if (minMetJetDeltaPhi >= 0.0 && metJetDeltaPhi <= minMetJetDeltaPhi) {
+      continue;
+    }
     cutflow.Fill(12);
     cutflowWeighted.Fill(12, eventWeight);
+
+    abcdRegion = 0;
+    if (abcdMode) {
+      const bool isoPass = selectedMuonIso < abcdIsoPassMax;
+      const bool isoFail = selectedMuonIso >= abcdIsoPassMax &&
+                           selectedMuonIso < abcdIsoFailMax;
+      const bool mtHigh = muonMetTransverseMass > abcdMtBoundary;
+      if (isoPass) {
+        abcdRegion = mtHigh ? 1 : 2;
+      } else if (isoFail) {
+        abcdRegion = mtHigh ? 3 : 4;
+      }
+      if (abcdRegion == 0) {
+        continue;
+      }
+      abcdYields.Fill(abcdRegion);
+      abcdYieldsWeighted.Fill(abcdRegion, eventWeight);
+      abcdEvents->Fill();
+      if (abcdRegion != 1) {
+        continue;
+      }
+    }
+
+    out.Fill();
+    cutflow.Fill(13);
+    cutflowWeighted.Fill(13, eventWeight);
     ++selected;
     selectedSumGenWeights += eventWeight;
   }
@@ -725,6 +809,11 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
 
   output.cd();
   out.Write();
+  if (abcdEvents != nullptr) {
+    abcdEvents->Write();
+    abcdYields.Write();
+    abcdYieldsWeighted.Write();
+  }
   cutflow.Write();
   cutflowWeighted.Write();
   ak4JetEtaPreselection.Write();
@@ -743,6 +832,9 @@ int PhysicsAnalysisTreeProducer(const char* inputFile = "input_nano.root",
             << "  muon pt min: " << muonPtMin << "\n"
             << "  muon iso max: " << muonIsoMax << "\n"
             << "  muon ID: " << muonIdMode << "\n"
+            << "  required HLT: "
+            << (requiredHltBranch.empty() ? "none" : requiredHltBranch) << "\n"
+            << "  ABCD mode: " << abcdMode << "\n"
             << "  HT jet pt min: " << htJetPtMin << "\n"
             << "  HT jet eta max: " << htJetEtaMax << "\n"
             << "  HT jet ID min: " << htJetIdMin << "\n"
