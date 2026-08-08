@@ -17,18 +17,18 @@ REQUEST_DISK="8 GB"
 CONFIG="config/analysis_muon_2018.json"
 SAMPLE_LABEL=""
 IS_DATA="0"
-JET_PT_MIN="200"
-JET_ETA_MAX="3"
-LEPTON_MODE="muon"
-MUON_PT_MIN="30"
-MUON_ETA_MAX="2.5"
-MUON_ISO_MAX="0.3"
-MUON_ISO_BRANCH="auto"
-MUON_ID="none"
-HT_JET_PT_MIN="30"
-HT_JET_ETA_MAX="2.4"
-HT_JET_ID_MIN="2"
-MIN_DPHI="1.5"
+JET_PT_MIN=""
+JET_ETA_MAX=""
+LEPTON_MODE=""
+MUON_PT_MIN=""
+MUON_ETA_MAX=""
+MUON_ISO_MAX=""
+MUON_ISO_BRANCH=""
+MUON_ID=""
+HT_JET_PT_MIN=""
+HT_JET_ETA_MAX=""
+HT_JET_ID_MIN=""
+MIN_DPHI=""
 USE_X509="0"
 REQUIRE_HDFS="auto"
 CMSSW_VERSION="CMSSW_10_6_17"
@@ -58,19 +58,19 @@ Options:
   --config PATH              Default: config/analysis_muon_2018.json
   --sample-label LABEL       Default: TAG
   --is-data 0|1              Default: 0
-  --jet-pt-min X             Default: 200
-  --jet-eta-max X            Default: 3
+  --jet-pt-min X             Default: config value (fallback: 200)
+  --jet-eta-max X            Default: config value (fallback: 3)
   --lepton-mode muon         Only muon is currently supported
-  --muon-pt-min X            Default: 30
-  --muon-eta-max X           Default: 2.5
-  --muon-iso-max X           Default: 0.3
-  --muon-iso-branch NAME     Default: auto
+  --muon-pt-min X            Default: config value (fallback: 30)
+  --muon-eta-max X           Default: config value (fallback: 2.5)
+  --muon-iso-max X           Default: config value (fallback: 0.3)
+  --muon-iso-branch NAME     Default: config value (fallback: auto)
   --muon-id none|medium|tight
-                              Default: none
-  --ht-jet-pt-min X          Default: 30
-  --ht-jet-eta-max X         Default: 2.4
-  --ht-jet-id-min N          Default: 2 (tight Jet_jetId)
-  --min-dphi X               Default: 1.5
+                              Default: config value (fallback: none)
+  --ht-jet-pt-min X          Default: config value (fallback: 30)
+  --ht-jet-eta-max X         Default: config value (fallback: 2.4)
+  --ht-jet-id-min N          Default: config value (fallback: 2)
+  --min-dphi X               Default: config value (fallback: 1.5)
   --use-x509                 Transfer current VOMS proxy
   --require-hdfs 0|1|auto    Default: auto
   --input-prefix auto|file|none|xrootd-wisc
@@ -157,7 +157,55 @@ if [[ ! -f "${CONFIG}" ]]; then
   exit 2
 fi
 
-mkdir -p "${LOG_DIR}"
+config_assignments="$(
+  python3 - "${CONFIG}" <<'PY'
+from __future__ import print_function
+import json
+import shlex
+import sys
+
+with open(sys.argv[1]) as handle:
+    config = json.load(handle)
+
+fields = (
+    ("CFG_JET_PT_MIN", "jet_pt_min", 200.0),
+    ("CFG_JET_ETA_MAX", "jet_eta_max", 3.0),
+    ("CFG_LEPTON_MODE", "lepton_mode", "muon"),
+    ("CFG_MUON_PT_MIN", "muon_pt_min", 30.0),
+    ("CFG_MUON_ETA_MAX", "muon_eta_max", 2.5),
+    ("CFG_MUON_ISO_MAX", "muon_iso_max", 0.3),
+    ("CFG_MUON_ISO_BRANCH", "muon_iso_branch", "auto"),
+    ("CFG_MUON_ID", "muon_id", "none"),
+    ("CFG_HT_JET_PT_MIN", "ht_jet_pt_min", 30.0),
+    ("CFG_HT_JET_ETA_MAX", "ht_jet_eta_max", 2.4),
+    ("CFG_HT_JET_ID_MIN", "ht_jet_id_min", 2),
+    ("CFG_MIN_DPHI", "min_dphi", 1.5),
+)
+for shell_name, key, default in fields:
+    value = config.get(key, default)
+    if isinstance(value, (dict, list)):
+        raise SystemExit("Config key %s must be a scalar" % key)
+    print("%s=%s" % (shell_name, shlex.quote(str(value))))
+PY
+)"
+eval "${config_assignments}"
+
+JET_PT_MIN="${JET_PT_MIN:-${CFG_JET_PT_MIN}}"
+JET_ETA_MAX="${JET_ETA_MAX:-${CFG_JET_ETA_MAX}}"
+LEPTON_MODE="${LEPTON_MODE:-${CFG_LEPTON_MODE}}"
+MUON_PT_MIN="${MUON_PT_MIN:-${CFG_MUON_PT_MIN}}"
+MUON_ETA_MAX="${MUON_ETA_MAX:-${CFG_MUON_ETA_MAX}}"
+MUON_ISO_MAX="${MUON_ISO_MAX:-${CFG_MUON_ISO_MAX}}"
+MUON_ISO_BRANCH="${MUON_ISO_BRANCH:-${CFG_MUON_ISO_BRANCH}}"
+MUON_ID="${MUON_ID:-${CFG_MUON_ID}}"
+HT_JET_PT_MIN="${HT_JET_PT_MIN:-${CFG_HT_JET_PT_MIN}}"
+HT_JET_ETA_MAX="${HT_JET_ETA_MAX:-${CFG_HT_JET_ETA_MAX}}"
+HT_JET_ID_MIN="${HT_JET_ID_MIN:-${CFG_HT_JET_ID_MIN}}"
+MIN_DPHI="${MIN_DPHI:-${CFG_MIN_DPHI}}"
+
+if [[ "${LOG_DIR}" != "/dev/null" ]]; then
+  mkdir -p "${LOG_DIR}"
+fi
 if [[ "${DIRECT_OUTPUT_FILES}" != "1" ]]; then
   mkdir -p "${RETURN_DIR}"
 fi
