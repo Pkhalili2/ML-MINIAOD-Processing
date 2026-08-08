@@ -4,6 +4,7 @@ from __future__ import print_function
 import argparse
 import csv
 import glob
+import math
 import os
 import sys
 
@@ -24,6 +25,12 @@ REQUIRED_DIAGNOSTIC_BRANCHES = {
     "metJetDeltaPhi",
     "muonMetTransverseMass",
 }
+REQUIRED_ABCD_OBJECTS = [
+    "ABCDEvents",
+    "abcd_yields",
+    "abcd_yields_weighted",
+    "AnalysisMetadata",
+]
 
 
 def is_remote(path):
@@ -75,6 +82,7 @@ def main():
     parser.add_argument("--expected-files", type=int)
     parser.add_argument("--require-lumis", action="store_true")
     parser.add_argument("--require-diagnostics", action="store_true")
+    parser.add_argument("--require-abcd", action="store_true")
     parser.add_argument("--output-csv")
     args = parser.parse_args()
 
@@ -96,6 +104,9 @@ def main():
         selected = -1.0
         raw_monotonic = False
         weighted_monotonic = False
+        abcd_counts = [-1, -1, -1, -1]
+        abcd_candidates = -1
+        abcd_boundaries_valid = False
         if not root_file or root_file.IsZombie():
             problems.append("unreadable")
         else:
@@ -107,6 +118,10 @@ def main():
                     name
                     for name in REQUIRED_DIAGNOSTIC_OBJECTS
                     if not root_file.Get(name)
+                )
+            if args.require_abcd:
+                missing.extend(
+                    name for name in REQUIRED_ABCD_OBJECTS if not root_file.Get(name)
                 )
             if missing:
                 problems.append("missing:" + ";".join(missing))
@@ -137,6 +152,60 @@ def main():
                     problems.append("selected_entries_mismatch")
             if weighted:
                 weighted_monotonic = is_nonincreasing(values(weighted))
+            if args.require_abcd and not any(
+                not root_file.Get(name) for name in REQUIRED_ABCD_OBJECTS
+            ):
+                candidates = root_file.Get("ABCDEvents")
+                yields = root_file.Get("abcd_yields")
+                metadata = root_file.Get("AnalysisMetadata")
+                observed = [0, 0, 0, 0]
+                boundary_problem = False
+                for candidate in candidates:
+                    region = int(candidate.abcdRegion)
+                    isolation = float(candidate.selectedMuonIso)
+                    transverse_mass = float(candidate.muonMetTransverseMass)
+                    if region < 1 or region > 4 or not all(
+                        math.isfinite(value) for value in (isolation, transverse_mass)
+                    ):
+                        boundary_problem = True
+                        continue
+                    valid_region = (
+                        (region == 1 and isolation < 0.15 and transverse_mass > 50.0)
+                        or (region == 2 and isolation < 0.15 and transverse_mass <= 50.0)
+                        or (
+                            region == 3
+                            and 0.15 <= isolation < 0.5
+                            and transverse_mass > 50.0
+                        )
+                        or (
+                            region == 4
+                            and 0.15 <= isolation < 0.5
+                            and transverse_mass <= 50.0
+                        )
+                    )
+                    if not valid_region:
+                        boundary_problem = True
+                    observed[region - 1] += 1
+                abcd_candidates = int(candidates.GetEntries())
+                abcd_counts = observed
+                histogram_counts = [int(round(value)) for value in values(yields)]
+                if observed != histogram_counts:
+                    problems.append("abcd_histogram_mismatch")
+                if sum(observed) != abcd_candidates:
+                    problems.append("abcd_candidate_count_mismatch")
+                if entries >= 0 and observed[0] != entries:
+                    problems.append("abcd_region_a_entries_mismatch")
+                if boundary_problem:
+                    problems.append("abcd_boundary_violation")
+                abcd_boundaries_valid = not boundary_problem
+                if metadata.GetEntries() != 1:
+                    problems.append("abcd_metadata_entries")
+                else:
+                    metadata.GetEntry(0)
+                    if int(metadata.abcdMode) != 1:
+                        problems.append("abcd_mode_disabled")
+                    if str(metadata.requiredHlt) != "HLT_Mu50":
+                        problems.append("required_hlt_mismatch")
             root_file.Close()
 
         status = "ok" if not problems else "error"
@@ -148,6 +217,12 @@ def main():
                 "selected_cutflow": "%.17g" % selected,
                 "raw_cutflow_monotonic": int(raw_monotonic),
                 "weighted_cutflow_monotonic": int(weighted_monotonic),
+                "abcd_candidates": abcd_candidates,
+                "abcd_a": abcd_counts[0],
+                "abcd_b": abcd_counts[1],
+                "abcd_c": abcd_counts[2],
+                "abcd_d": abcd_counts[3],
+                "abcd_boundaries_valid": int(abcd_boundaries_valid),
                 "problems": ";".join(problems),
             }
         )
@@ -163,6 +238,12 @@ def main():
                 "selected_cutflow",
                 "raw_cutflow_monotonic",
                 "weighted_cutflow_monotonic",
+                "abcd_candidates",
+                "abcd_a",
+                "abcd_b",
+                "abcd_c",
+                "abcd_d",
+                "abcd_boundaries_valid",
                 "problems",
             ]
             writer = csv.DictWriter(handle, fieldnames=fieldnames)

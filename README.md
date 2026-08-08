@@ -471,6 +471,9 @@ python scripts/audit_analysis_outputs.py \
 ```
 
 Omit `--require-lumis` for simulated samples.
+For trigger/ABCD products, add `--require-abcd` to verify `ABCDEvents`, the
+four raw region yields, the isolation and transverse-mass boundaries, the
+region-A event count, `HLT_Mu50`, and the stored ABCD metadata in every file.
 
 ## Validation
 
