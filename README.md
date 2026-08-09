@@ -226,7 +226,7 @@ QCD-simulation closure test:
 
 ```bash
 python scripts/make_abcd_plots.py \
-  --metadata config/samples_trigger_abcd_2018.csv \
+  --metadata config/samples_trigger_abcd_2018_20260808.csv \
   --output-dir plots/trigger_abcd \
   --lumi-pb 37997.277757686
 ```
@@ -474,6 +474,8 @@ Omit `--require-lumis` for simulated samples.
 For trigger/ABCD products, add `--require-abcd` to verify `ABCDEvents`, the
 four raw region yields, the isolation and transverse-mass boundaries, the
 region-A event count, `HLT_Mu50`, and the stored ABCD metadata in every file.
+Merged ROOT files may contain one metadata row per source file; the audit
+accepts them only when every stored selection field is mutually consistent.
 
 ## Validation
 

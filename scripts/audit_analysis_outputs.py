@@ -198,13 +198,67 @@ def main():
                 if boundary_problem:
                     problems.append("abcd_boundary_violation")
                 abcd_boundaries_valid = not boundary_problem
-                if metadata.GetEntries() != 1:
+                metadata_entries = int(metadata.GetEntries())
+                if metadata_entries <= 0:
                     problems.append("abcd_metadata_entries")
                 else:
-                    metadata.GetEntry(0)
-                    if int(metadata.abcdMode) != 1:
+                    float_fields = (
+                        "jetPtMin",
+                        "jetEtaMax",
+                        "muonPtMin",
+                        "muonEtaMax",
+                        "muonIsoMax",
+                        "minDeltaPhi",
+                        "htJetPtMin",
+                        "htJetEtaMax",
+                        "minEventHT",
+                        "minMetPt",
+                        "minMuonMetTransverseMass",
+                        "minMetJetDeltaPhi",
+                        "abcdIsoPassMax",
+                        "abcdIsoFailMax",
+                        "abcdMtBoundary",
+                    )
+                    int_fields = ("htJetIdMin", "abcdMode")
+                    string_fields = ("requiredHlt", "muonId", "muonIsoBranch")
+                    reference_metadata = None
+                    metadata_consistent = True
+                    abcd_mode_enabled = True
+                    required_hlt_matches = True
+                    for metadata_index in range(metadata_entries):
+                        metadata.GetEntry(metadata_index)
+                        current_metadata = {
+                            name: float(getattr(metadata, name)) for name in float_fields
+                        }
+                        current_metadata.update(
+                            {name: int(getattr(metadata, name)) for name in int_fields}
+                        )
+                        current_metadata.update(
+                            {name: str(getattr(metadata, name)) for name in string_fields}
+                        )
+                        if reference_metadata is None:
+                            reference_metadata = current_metadata
+                        else:
+                            for name in float_fields:
+                                if not math.isclose(
+                                    current_metadata[name],
+                                    reference_metadata[name],
+                                    rel_tol=1.0e-12,
+                                    abs_tol=1.0e-12,
+                                ):
+                                    metadata_consistent = False
+                            for name in int_fields + string_fields:
+                                if current_metadata[name] != reference_metadata[name]:
+                                    metadata_consistent = False
+                        if current_metadata["abcdMode"] != 1:
+                            abcd_mode_enabled = False
+                        if current_metadata["requiredHlt"] != "HLT_Mu50":
+                            required_hlt_matches = False
+                    if not metadata_consistent:
+                        problems.append("abcd_metadata_inconsistent")
+                    if not abcd_mode_enabled:
                         problems.append("abcd_mode_disabled")
-                    if str(metadata.requiredHlt) != "HLT_Mu50":
+                    if not required_hlt_matches:
                         problems.append("required_hlt_mismatch")
             root_file.Close()
 
